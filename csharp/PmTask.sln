@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PmTask", "PmTask\PmTask.csproj", "{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectManager.SDK", "..\..\projectmanager-sdk-csharp\src\ProjectManager.SDK.csproj", "{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
