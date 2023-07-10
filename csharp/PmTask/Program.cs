@@ -2,6 +2,7 @@
 using CommandLine;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
+using Simple.OData.Client;
 
 public static class Program
 {
@@ -30,6 +31,13 @@ public static class Program
         public string? Priority { get; set; }
     }
     
+    [Verb("list", HelpText = "List tasks within a project")]
+    private class ListOptions : BaseOptions
+    {
+        [Option("project", HelpText = "The name, ID, or ShortID of the project in which to create the task")]
+        public string? Project { get; set; }
+    }
+    
     private	static Type[] LoadVerbs()
     {
         return Assembly.GetExecutingAssembly().GetTypes()
@@ -41,7 +49,39 @@ public static class Program
         var types = LoadVerbs();	
         Parser.Default.ParseArguments(args, types)
             .WithParsed<CreateOptions>(CreateTask)
+            .WithParsed<ListOptions>(ListTask)
             .WithNotParsed(HandleErrors);
+    }
+
+    private static void ListTask(ListOptions options)
+    {
+        Console.WriteLine("About to create OData client");
+        // Try the same thing but with OData
+        var projectsClient = CreateOdataClient(options);
+        Console.WriteLine("About to query OData client");
+        var projects = projectsClient.Filter(project => project.ShortId == options.Project
+                                                        || string.Equals(project.Name, options.Project,
+                                                            StringComparison.OrdinalIgnoreCase)
+                                                        || string.Equals(project.Id.ToString(), options.Project,
+                                                            StringComparison.OrdinalIgnoreCase))
+            .FindEntriesAsync()
+            .Result
+            .ToList();
+        Console.WriteLine("About to use data from OData client");
+        
+        // Fetch all projects and find the one that matches locally so we can give debugging information
+        var project = projects.FirstOrDefault(project =>
+            project.ShortId == options.Project 
+            || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
+            || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
+        if (project?.Id == null)
+        {
+            Console.WriteLine($"Found {projects.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
+            foreach (var item in projects)
+            {
+                Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
+            }
+        }
     }
 
     private static void HandleErrors(IEnumerable<Error> errors)
@@ -50,25 +90,54 @@ public static class Program
         Console.WriteLine($"Found {errList.Count} errors.");
     }
 
+    private static IBoundClient<ProjectDto> CreateOdataClient(BaseOptions options)
+    {
+        var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
+        var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
+
+        var oDataClientSettings = new ODataClientSettings(new Uri(env + "/project-api/public/projects"))
+        {
+            BeforeRequest = delegate(HttpRequestMessage message)
+            {
+                message.Headers.Add("Authorization", "Bearer " + apiKey);
+            },
+            OnTrace = Console.WriteLine
+        };
+
+        var mainClient = new ODataClient(oDataClientSettings);
+        return mainClient.For<ProjectDto>();
+    }
+
     private static void CreateTask(CreateOptions options)
     {
         var client = MakeClient(options);
         
+        // Try the same thing but with OData
+        var projectsClient = CreateOdataClient(options);
+        var project = projectsClient.Filter(project => project.ShortId == options.Project
+                                                       || string.Equals(project.Name, options.Project,
+                                                           StringComparison.OrdinalIgnoreCase)
+                                                       || string.Equals(project.Id.ToString(), options.Project,
+                                                           StringComparison.OrdinalIgnoreCase))
+            .FindEntryAsync()
+            .Result;
+        
         // Fetch all projects and find the one that matches locally so we can give debugging information
-        var projects = client.Project.QueryProjects().Result;
-        if (!projects.Success)
-        {
-            Console.WriteLine($"Could not retrieve projects: {projects.Error.Message}");
-            return;
-        }
-        var project = projects.Data.FirstOrDefault(project =>
-            project.ShortId == options.Project 
-            || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
-            || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
+        // var projects = client.Project.QueryProjects().Result;
+        // if (!projects.Success)
+        // {
+        //     Console.WriteLine($"Could not retrieve projects: {projects.Error.Message}");
+        //     return;
+        // }
+        // var project = projects.Data.FirstOrDefault(project =>
+        //     project.ShortId == options.Project 
+        //     || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
+        //     || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
         if (project?.Id == null)
         {
-            Console.WriteLine($"Found {projects.Data.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
-            foreach (var item in projects.Data)
+            var projects = projectsClient.FindEntriesAsync().Result.ToList();
+            Console.WriteLine($"Found {projects.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
+            foreach (var item in projects)
             {
                 Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
             }
@@ -90,7 +159,7 @@ public static class Program
         Console.WriteLine($"Created task {options.TaskName}: {task.Data.Id}");
     }
 
-    private static ProjectManagerClient MakeClient(CreateOptions options)
+    private static ProjectManagerClient MakeClient(BaseOptions options)
     {
         var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
         var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
