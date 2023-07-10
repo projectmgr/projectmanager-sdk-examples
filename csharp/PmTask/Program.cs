@@ -162,7 +162,7 @@ public static class Program
     private static ProjectManagerClient MakeClient(BaseOptions options)
     {
         var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
-        var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
+        var env = options.Env ?? Environment.GetEnvironmentVariable("PM_ENV");
         return ProjectManagerClient
             .WithCustomEnvironment(env)
             .WithBearerToken(apiKey)
