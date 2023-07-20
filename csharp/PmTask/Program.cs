@@ -59,14 +59,15 @@ public static class Program
         // Try the same thing but with OData
         var projectsClient = CreateOdataClient(options);
         Console.WriteLine("About to query OData client");
-        var projects = projectsClient.Filter(project => project.ShortId == options.Project
-                                                        || string.Equals(project.Name, options.Project,
-                                                            StringComparison.OrdinalIgnoreCase)
-                                                        || string.Equals(project.Id.ToString(), options.Project,
-                                                            StringComparison.OrdinalIgnoreCase))
-            .FindEntriesAsync()
-            .Result
-            .ToList();
+        var projects = projectsClient.FindEntriesAsync().Result.ToList();
+        // var projects = projectsClient.Filter(project => project.ShortId == options.Project
+        //                                                 || string.Equals(project.Name, options.Project,
+        //                                                     StringComparison.OrdinalIgnoreCase)
+        //                                                 || string.Equals(project.Id.ToString(), options.Project,
+        //                                                     StringComparison.OrdinalIgnoreCase))
+        //     .FindEntriesAsync()
+        //     .Result
+        //     .ToList();
         Console.WriteLine("About to use data from OData client");
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
@@ -101,7 +102,15 @@ public static class Program
             {
                 message.Headers.Add("Authorization", "Bearer " + apiKey);
             },
-            OnTrace = Console.WriteLine
+            OnTrace = Console.WriteLine,
+            IgnoreResourceNotFoundException = true,
+            MetadataDocument = @"<EntityType Name=""ProjectDto"">
+    <Key><PropertyRef Name=""Id""/></Key>
+    <Property Name=""Id"" Type=""Edm.Guid"" Nullable=""false""/>
+    <Property Name=""ShortId"" Type=""Edm.String"" Nullable=""false""/>
+    <Property Name=""Name"" Type=""Edm.String"" Nullable=""false""/>
+</EntityType>
+",
         };
 
         var mainClient = new ODataClient(oDataClientSettings);
@@ -113,31 +122,30 @@ public static class Program
         var client = MakeClient(options);
         
         // Try the same thing but with OData
-        var projectsClient = CreateOdataClient(options);
-        var project = projectsClient.Filter(project => project.ShortId == options.Project
-                                                       || string.Equals(project.Name, options.Project,
-                                                           StringComparison.OrdinalIgnoreCase)
-                                                       || string.Equals(project.Id.ToString(), options.Project,
-                                                           StringComparison.OrdinalIgnoreCase))
-            .FindEntryAsync()
-            .Result;
+        // var projectsClient = CreateOdataClient(options);
+        // var project = projectsClient.Filter(project => project.ShortId == options.Project
+        //                                                || string.Equals(project.Name, options.Project,
+        //                                                    StringComparison.OrdinalIgnoreCase)
+        //                                                || string.Equals(project.Id.ToString(), options.Project,
+        //                                                    StringComparison.OrdinalIgnoreCase))
+        //     .FindEntryAsync()
+        //     .Result;
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
-        // var projects = client.Project.QueryProjects().Result;
-        // if (!projects.Success)
-        // {
-        //     Console.WriteLine($"Could not retrieve projects: {projects.Error.Message}");
-        //     return;
-        // }
-        // var project = projects.Data.FirstOrDefault(project =>
-        //     project.ShortId == options.Project 
-        //     || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
-        //     || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
+        var projects = client.Project.QueryProjects().Result;
+        if (!projects.Success)
+        {
+            Console.WriteLine($"Could not retrieve projects: {projects.Error.Message}");
+            return;
+        }
+        var project = projects.Data.FirstOrDefault(project =>
+            project.ShortId == options.Project 
+            || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
+            || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
         if (project?.Id == null)
         {
-            var projects = projectsClient.FindEntriesAsync().Result.ToList();
-            Console.WriteLine($"Found {projects.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
-            foreach (var item in projects)
+            Console.WriteLine($"Found {projects.Data.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
+            foreach (var item in projects.Data)
             {
                 Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
             }
