@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using CommandLine;
+using PmTask;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
@@ -37,6 +38,19 @@ public static class Program
         public string? Project { get; set; }
     }
     
+    [Verb("discuss", HelpText = "Add a comment to a task within a project")]
+    private class DiscussOptions : BaseOptions
+    {
+        [Option("project", HelpText = "The name, ID, or ShortID of the project in which the task")]
+        public string? Project { get; set; }
+        
+        [Option("task", HelpText = "The name, ID, or ShortID of the task to comment upon")]
+        public string? Task { get; set; }
+        
+        [Option("message", HelpText = "The text, in markdown format, to add to the discussion")]
+        public string? Message { get; set; }
+    }
+    
     private	static Type[] LoadVerbs()
     {
         return Assembly.GetExecutingAssembly().GetTypes()
@@ -49,33 +63,36 @@ public static class Program
         Parser.Default.ParseArguments(args, types)
             .WithParsed<CreateOptions>(CreateTask)
             .WithParsed<ListOptions>(ListTask)
+            .WithParsed<DiscussOptions>(DiscussTask)
             .WithNotParsed(HandleErrors);
+    }
+
+    private static void DiscussTask(DiscussOptions obj)
+    {
+        throw new NotImplementedException();
     }
 
     private static void ListTask(ListOptions options)
     {
-        Console.WriteLine("About to create OData client");
-        // Try the same thing but with OData
-        var projectsClient = MakeClient(options);
-        Console.WriteLine("About to query OData client");
-        var projects = projectsClient.Project.QueryProjects().Result.Data;
-        Console.WriteLine("About to use data from OData client");
-        
-        // Fetch all projects and find the one that matches locally so we can give debugging information
-        var project = projects.FirstOrDefault(project =>
-            project.ShortId == options.Project 
-            || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
-            || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
-        if (project?.Id == null)
+        var client = MakeClient(options);
+        var project = client.FindProject(options.Project).Result;
+        if (project == null)
         {
-            Console.WriteLine($"Found {projects.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
-            foreach (var item in projects)
-            {
-                Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
-            }
+            return;
         }
-    }
 
+        // Print out information about this project
+        Console.WriteLine($"Project {project.Name} ({project.ShortId})");
+        
+        // List all tasks within this project
+        var tasks = client.Task.QueryTasks(null, null, $"projectId eq {project.Id}", null, null, null).Result;
+        foreach (var task in tasks.Data)
+        {
+            Console.WriteLine($"  {task.ShortId} {task.Name} ({task.PercentComplete}% complete)");
+        }
+
+        Console.WriteLine($"  {tasks.Data.Length} tasks.");
+    }
     private static void HandleErrors(IEnumerable<Error> errors)
     {
         var errList = errors.ToList();
@@ -88,23 +105,9 @@ public static class Program
         var client = MakeClient(options);
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
-        var projects = client.Project.QueryProjects().Result;
-        if (!projects.Success)
+        var project = client.FindProject(options.Project).Result;
+        if (project == null)
         {
-            Console.WriteLine($"Could not retrieve projects: {projects.Error.Message}");
-            return;
-        }
-        var project = projects.Data.FirstOrDefault(project =>
-            project.ShortId == options.Project 
-            || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
-            || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
-        if (project?.Id == null)
-        {
-            Console.WriteLine($"Found {projects.Data.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
-            foreach (var item in projects.Data)
-            {
-                Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
-            }
             return;
         }
         
