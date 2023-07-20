@@ -38,13 +38,17 @@ public static class Program
         public string? Project { get; set; }
     }
     
-    [Verb("discuss", HelpText = "Add a comment to a task within a project")]
+    [Verb("discuss", HelpText = "Read all discussion comments about a task")]
     private class DiscussOptions : BaseOptions
     {
-        [Option("project", HelpText = "The name, ID, or ShortID of the project in which the task")]
-        public string? Project { get; set; }
-        
-        [Option("task", HelpText = "The name, ID, or ShortID of the task to comment upon")]
+        [Option("task", HelpText = "The ShortID of the task to review discussion")]
+        public string? Task { get; set; }
+    }
+    
+    [Verb("comment", HelpText = "Add a comment to a task within a project")]
+    private class CommentOptions : BaseOptions
+    {
+        [Option("task", HelpText = "The ShortID of the task to comment upon")]
         public string? Task { get; set; }
         
         [Option("message", HelpText = "The text, in markdown format, to add to the discussion")]
@@ -64,12 +68,66 @@ public static class Program
             .WithParsed<CreateOptions>(CreateTask)
             .WithParsed<ListOptions>(ListTask)
             .WithParsed<DiscussOptions>(DiscussTask)
+            .WithParsed<CommentOptions>(CommentTask)
             .WithNotParsed(HandleErrors);
     }
 
-    private static void DiscussTask(DiscussOptions obj)
+    private static void DiscussTask(DiscussOptions options)
     {
-        throw new NotImplementedException();
+        // Fetch project and task
+        var client = MakeClient(options);
+        var task = client.FindTask(options.Task).Result;
+        if (task?.Id == null)
+        {
+            return;
+        }
+
+        Console.WriteLine($"Task {task.Name} ({task.ShortId})");
+        
+        // Retrieve discussions
+        var discussions = client.Discussion.RetrieveTaskComments(task.Id.Value).Result;
+        if (discussions.Data.Length == 0)
+        {
+            Console.WriteLine("No comments.");
+        }
+        foreach (var comment in discussions.Data)
+        {
+            Console.WriteLine($"On {comment.CreateDate} {comment.AuthorName} wrote:");
+            Console.WriteLine("  " + comment.Text);
+            foreach (var reaction in comment.Emoji ?? Array.Empty<DiscussionEmoji>())
+            {
+                Console.WriteLine($"Reaction: {reaction.Name} ({reaction.UserIds.Length})");
+            }
+        }
+    }
+    
+    
+    private static void CommentTask(CommentOptions options)
+    {
+        // Fetch project and task
+        var client = MakeClient(options);
+        var task = client.FindTask(options.Task).Result;
+        if (task?.Id == null)
+        {
+            return;
+        }
+
+        // Explain what we're doing
+        Console.WriteLine($"Task {task.Name} ({task.ShortId})");
+        
+        // Add discussion
+        var item = new DiscussionCreateDto()
+        {
+            Text = options.Message,
+        };
+        var result = client.Discussion.CreateTaskComments(task.Id.Value, item).Result;
+        if (result == null || !result.Success)
+        {
+            Console.WriteLine("Task comment failed.");
+            return;
+        }
+
+        Console.WriteLine($"Added discussion comment {result.Data.DiscussionCommentId}.");
     }
 
     private static void ListTask(ListOptions options)
@@ -106,7 +164,7 @@ public static class Program
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
         var project = client.FindProject(options.Project).Result;
-        if (project == null)
+        if (project?.Id == null)
         {
             return;
         }
