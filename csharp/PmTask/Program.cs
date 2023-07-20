@@ -2,7 +2,6 @@
 using CommandLine;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
-using Simple.OData.Client;
 
 public static class Program
 {
@@ -57,17 +56,9 @@ public static class Program
     {
         Console.WriteLine("About to create OData client");
         // Try the same thing but with OData
-        var projectsClient = CreateOdataClient(options);
+        var projectsClient = MakeClient(options);
         Console.WriteLine("About to query OData client");
-        var projects = projectsClient.FindEntriesAsync().Result.ToList();
-        // var projects = projectsClient.Filter(project => project.ShortId == options.Project
-        //                                                 || string.Equals(project.Name, options.Project,
-        //                                                     StringComparison.OrdinalIgnoreCase)
-        //                                                 || string.Equals(project.Id.ToString(), options.Project,
-        //                                                     StringComparison.OrdinalIgnoreCase))
-        //     .FindEntriesAsync()
-        //     .Result
-        //     .ToList();
+        var projects = projectsClient.Project.QueryProjects().Result.Data;
         Console.WriteLine("About to use data from OData client");
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
@@ -91,45 +82,10 @@ public static class Program
         Console.WriteLine($"Found {errList.Count} errors.");
     }
 
-    private static IBoundClient<ProjectDto> CreateOdataClient(BaseOptions options)
-    {
-        var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
-        var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
-
-        var oDataClientSettings = new ODataClientSettings(new Uri(env + "/project-api/public/projects"))
-        {
-            BeforeRequest = delegate(HttpRequestMessage message)
-            {
-                message.Headers.Add("Authorization", "Bearer " + apiKey);
-            },
-            OnTrace = Console.WriteLine,
-            IgnoreResourceNotFoundException = true,
-            MetadataDocument = @"<EntityType Name=""ProjectDto"">
-    <Key><PropertyRef Name=""Id""/></Key>
-    <Property Name=""Id"" Type=""Edm.Guid"" Nullable=""false""/>
-    <Property Name=""ShortId"" Type=""Edm.String"" Nullable=""false""/>
-    <Property Name=""Name"" Type=""Edm.String"" Nullable=""false""/>
-</EntityType>
-",
-        };
-
-        var mainClient = new ODataClient(oDataClientSettings);
-        return mainClient.For<ProjectDto>();
-    }
 
     private static void CreateTask(CreateOptions options)
     {
         var client = MakeClient(options);
-        
-        // Try the same thing but with OData
-        // var projectsClient = CreateOdataClient(options);
-        // var project = projectsClient.Filter(project => project.ShortId == options.Project
-        //                                                || string.Equals(project.Name, options.Project,
-        //                                                    StringComparison.OrdinalIgnoreCase)
-        //                                                || string.Equals(project.Id.ToString(), options.Project,
-        //                                                    StringComparison.OrdinalIgnoreCase))
-        //     .FindEntryAsync()
-        //     .Result;
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
         var projects = client.Project.QueryProjects().Result;
