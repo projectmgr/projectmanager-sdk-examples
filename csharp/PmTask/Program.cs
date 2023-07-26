@@ -157,7 +157,6 @@ public static class Program
         Console.WriteLine($"Found {errList.Count} errors.");
     }
 
-
     private static void CreateTask(CreateOptions options)
     {
         var client = MakeClient(options);
