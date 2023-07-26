@@ -4,13 +4,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PmTask", "PmTask\PmTask.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectManager.SDK", "..\..\projectmanager-sdk-csharp\src\ProjectManager.SDK.csproj", "{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Files", "Files", "{AB9D70B6-AE84-45D0-B735-D1FBCFD2EE39}"
-	ProjectSection(SolutionItems) = preProject
-		..\.gitignore = ..\.gitignore
-		..\LICENSE = ..\LICENSE
-		..\README.md = ..\README.md
-	EndProjectSection
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
