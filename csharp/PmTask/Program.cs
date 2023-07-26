@@ -214,7 +214,7 @@ namespace PmTask
             var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
             var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
 
-            var oDataClientSettings = new ODataClientSettings(new Uri(env + "/odata"))
+            var oDataClientSettings = new ODataClientSettings(new Uri(env + "/api/data/projects"))
             {
                 BeforeRequest = delegate(HttpRequestMessage message)
                 {
