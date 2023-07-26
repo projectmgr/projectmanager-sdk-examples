@@ -63,7 +63,8 @@ namespace PmTask
         [Verb("odata", HelpText = "Test OData connectivity")]
         private class OdataOptions : BaseOptions
         {
-
+            [Option("name", HelpText = "The name of the project to query")]
+            public string? ProjectName { get; set; }
         }
 
         private static Type[] LoadVerbs()
@@ -87,7 +88,7 @@ namespace PmTask
         private static void OdataTask(OdataOptions options)
         {
             var client = MakeOdataClient(options);
-            var projects = client.Filter(item => item.Name == "test").FindEntriesAsync().Result.ToList();
+            var projects = client.Filter(item => item.Name == options.ProjectName).FindEntriesAsync().Result.ToList();
             foreach (var project in projects)
             {
                 Console.WriteLine($"Project fetched from OData: {project.Name}");
@@ -213,7 +214,7 @@ namespace PmTask
             var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
             var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
 
-            var oDataClientSettings = new ODataClientSettings(new Uri(env + "/project-api/public/projects"))
+            var oDataClientSettings = new ODataClientSettings(new Uri(env + "/odata"))
             {
                 BeforeRequest = delegate(HttpRequestMessage message)
                 {
