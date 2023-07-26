@@ -3,6 +3,7 @@ using CommandLine;
 using PmTask;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
+using Simple.OData.Client;
 
 public static class Program
 {
@@ -54,6 +55,12 @@ public static class Program
         [Option("message", HelpText = "The text, in markdown format, to add to the discussion")]
         public string? Message { get; set; }
     }
+
+    [Verb("odata", HelpText = "Test OData connectivity")]
+    private class OdataOptions : BaseOptions
+    {
+        
+    }
     
     private	static Type[] LoadVerbs()
     {
@@ -69,7 +76,18 @@ public static class Program
             .WithParsed<ListOptions>(ListTask)
             .WithParsed<DiscussOptions>(DiscussTask)
             .WithParsed<CommentOptions>(CommentTask)
+            .WithParsed<OdataOptions>(OdataTask)
             .WithNotParsed(HandleErrors);
+    }
+
+    private static void OdataTask(OdataOptions options)
+    {
+        var client = MakeOdataClient(options);
+        var projects = client.Filter(item => item.Name == "test").FindEntriesAsync().Result.ToList();
+        foreach (var project in projects)
+        {
+            Console.WriteLine($"Project fetched from OData: {project.Name}");
+        }
     }
 
     private static void DiscussTask(DiscussOptions options)
@@ -184,6 +202,25 @@ public static class Program
         Console.WriteLine($"Created task {options.TaskName}: {task.Data.Id}");
     }
 
+    private static IBoundClient<ProjectDto> MakeOdataClient(BaseOptions options)
+    {
+        var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
+        var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
+
+        var oDataClientSettings = new ODataClientSettings(new Uri(env + "/project-api/public/projects"))
+        {
+            BeforeRequest = delegate(HttpRequestMessage message)
+            {
+                message.Headers.Add("Authorization", "Bearer " + apiKey);
+            },
+            OnTrace = Console.WriteLine,
+            IgnoreResourceNotFoundException = true,
+        };
+
+        var mainClient = new ODataClient(oDataClientSettings);
+        return mainClient.For<ProjectDto>();
+    }
+    
     private static ProjectManagerClient MakeClient(BaseOptions options)
     {
         var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
