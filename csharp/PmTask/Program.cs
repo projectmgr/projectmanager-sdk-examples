@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using CommandLine;
+using PmTask;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
@@ -30,6 +31,30 @@ public static class Program
         public string? Priority { get; set; }
     }
     
+    [Verb("list", HelpText = "List tasks within a project")]
+    private class ListOptions : BaseOptions
+    {
+        [Option("project", HelpText = "The name, ID, or ShortID of the project in which to create the task")]
+        public string? Project { get; set; }
+    }
+    
+    [Verb("discuss", HelpText = "Read all discussion comments about a task")]
+    private class DiscussOptions : BaseOptions
+    {
+        [Option("task", HelpText = "The ShortID of the task to review discussion")]
+        public string? Task { get; set; }
+    }
+    
+    [Verb("comment", HelpText = "Add a comment to a task within a project")]
+    private class CommentOptions : BaseOptions
+    {
+        [Option("task", HelpText = "The ShortID of the task to comment upon")]
+        public string? Task { get; set; }
+        
+        [Option("message", HelpText = "The text, in markdown format, to add to the discussion")]
+        public string? Message { get; set; }
+    }
+    
     private	static Type[] LoadVerbs()
     {
         return Assembly.GetExecutingAssembly().GetTypes()
@@ -41,9 +66,91 @@ public static class Program
         var types = LoadVerbs();	
         Parser.Default.ParseArguments(args, types)
             .WithParsed<CreateOptions>(CreateTask)
+            .WithParsed<ListOptions>(ListTask)
+            .WithParsed<DiscussOptions>(DiscussTask)
+            .WithParsed<CommentOptions>(CommentTask)
             .WithNotParsed(HandleErrors);
     }
 
+    private static void DiscussTask(DiscussOptions options)
+    {
+        // Fetch project and task
+        var client = MakeClient(options);
+        var task = client.FindTask(options.Task).Result;
+        if (task?.Id == null)
+        {
+            return;
+        }
+
+        Console.WriteLine($"Task {task.Name} ({task.ShortId})");
+        
+        // Retrieve discussions
+        var discussions = client.Discussion.RetrieveTaskComments(task.Id.Value).Result;
+        if (discussions.Data.Length == 0)
+        {
+            Console.WriteLine("No comments.");
+        }
+        foreach (var comment in discussions.Data)
+        {
+            Console.WriteLine($"On {comment.CreateDate} {comment.AuthorName} wrote:");
+            Console.WriteLine("  " + comment.Text);
+            foreach (var reaction in comment.Emoji ?? Array.Empty<DiscussionEmoji>())
+            {
+                Console.WriteLine($"Reaction: {reaction.Name} ({reaction.UserIds.Length})");
+            }
+        }
+    }
+    
+    
+    private static void CommentTask(CommentOptions options)
+    {
+        // Fetch project and task
+        var client = MakeClient(options);
+        var task = client.FindTask(options.Task).Result;
+        if (task?.Id == null)
+        {
+            return;
+        }
+
+        // Explain what we're doing
+        Console.WriteLine($"Task {task.Name} ({task.ShortId})");
+        
+        // Add discussion
+        var item = new DiscussionCreateDto()
+        {
+            Text = options.Message,
+        };
+        var result = client.Discussion.CreateTaskComments(task.Id.Value, item).Result;
+        if (result == null || !result.Success)
+        {
+            Console.WriteLine("Task comment failed.");
+            return;
+        }
+
+        Console.WriteLine($"Added discussion comment {result.Data.DiscussionCommentId}.");
+    }
+
+    private static void ListTask(ListOptions options)
+    {
+        var client = MakeClient(options);
+        var project = client.FindProject(options.Project).Result;
+        if (project == null)
+        {
+            return;
+        }
+
+        // Print out information about this project
+        Console.WriteLine($"Project {project.Name} ({project.ShortId})");
+        
+        // List all tasks within this project
+        var tasks = client.Task.QueryTasks(null, null, $"projectId eq {project.Id}", null, null, null).Result;
+        foreach (var task in tasks.Data)
+        {
+            Console.WriteLine($"  {task.ShortId} {task.Name} ({task.PercentComplete}% complete)");
+        }
+
+        Console.WriteLine($"  {tasks.Data.Length} tasks.");
+    }
     private static void HandleErrors(IEnumerable<Error> errors)
     {
         var errList = errors.ToList();
@@ -55,23 +162,9 @@ public static class Program
         var client = MakeClient(options);
         
         // Fetch all projects and find the one that matches locally so we can give debugging information
-        var projects = client.Project.QueryProjects().Result;
-        if (!projects.Success)
-        {
-            Console.WriteLine($"Could not retrieve projects: {projects.Error.Message}");
-            return;
-        }
-        var project = projects.Data.FirstOrDefault(project =>
-            project.ShortId == options.Project 
-            || string.Equals(project.Name, options.Project, StringComparison.OrdinalIgnoreCase) 
-            || string.Equals(project.Id.ToString(), options.Project, StringComparison.OrdinalIgnoreCase));
+        var project = client.FindProject(options.Project).Result;
         if (project?.Id == null)
         {
-            Console.WriteLine($"Found {projects.Data.Count()} project(s), but none with ID, shortID, or name '{options.Project}'.");
-            foreach (var item in projects.Data)
-            {
-                Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
-            }
             return;
         }
         
@@ -90,10 +183,10 @@ public static class Program
         Console.WriteLine($"Created task {options.TaskName}: {task.Data.Id}");
     }
 
-    private static ProjectManagerClient MakeClient(CreateOptions options)
+    private static ProjectManagerClient MakeClient(BaseOptions options)
     {
         var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
-        var env = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_ENV");
+        var env = options.Env ?? Environment.GetEnvironmentVariable("PM_ENV");
         return ProjectManagerClient
             .WithCustomEnvironment(env)
             .WithBearerToken(apiKey)
