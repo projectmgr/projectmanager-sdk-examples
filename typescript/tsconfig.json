@@ -4,11 +4,11 @@
       "module": "commonjs",
       "outDir": "dist",
       "rootDir": "src",
-      "strict": true,
-      "sourceMap": true,
-      "moduleResolution": "node",
       "esModuleInterop": true
     },
+    "lib": [
+      "es2017"
+    ],
     "include": ["src/**/*.ts"],
     "exclude": ["node_modules"]
   }
