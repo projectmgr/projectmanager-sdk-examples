@@ -14,12 +14,18 @@ async function DemonstrationMethod()
     // Create a client
     var client = ProjectManagerClient
         .withEnvironment("production")
-        .withApiKey(apiKey);
+        .withBearerToken(apiKey);
 
     // Check that we are connected
     console.log('About to call retrieve me');
     var result = await client.Me.retrieveMe();
-    console.log(`We are connected as ${result.data?.fullName} (${result.data?.emailAddress}`);
+    console.log(`We are connected as ${result.data?.fullName} (${result.data?.emailAddress})`);
+
+    // Fetch tasks
+    var tasks = await client.Task.queryTasks(null, null, null, null, null, null);
+    tasks.data.forEach(task => {
+        console.log(`Task ${task.shortId} - ${task.name}`);
+    });
 }
 
 DemonstrationMethod()
