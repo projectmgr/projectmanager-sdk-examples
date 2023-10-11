@@ -20,6 +20,6 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "projectmanager-sdk": "file:../../projectmanager-sdk-typescript/projectmanager-sdk-11.1.2053.tgz"
+    "projectmanager-sdk": "^11.1.2053"
   }
 }
