@@ -23,9 +23,21 @@
     </dependency>
 
     <dependency>
-      <groupId>ProjectManager.SDK</groupId>
-      <artifactId>ProjectManager.SDK</artifactId>
-      <version>96.0.2109</version>
+      <groupId>com.projectmanager</groupId>
+      <artifactId>SDK</artifactId>
+      <version>96.0.2115.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.8.9</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.httpcomponents.client5</groupId>
+      <artifactId>httpclient5-fluent</artifactId>
+      <version>5.2.1</version>
     </dependency>
 
   </dependencies>

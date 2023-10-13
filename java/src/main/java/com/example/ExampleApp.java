@@ -1,8 +1,6 @@
 package com.example;
 
-import java.util.Map;
-
-import ProjectManager.SDK.ProjectManagerClient;
+import com.projectmanager.ProjectManagerClient;
 
 /**
  * Starter class for MyStats application.
