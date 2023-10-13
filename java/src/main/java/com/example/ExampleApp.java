@@ -31,7 +31,7 @@ public class ExampleApp {
         if (result.getSuccess()) {
             System.out.println("You are logged on as " + result.getData().getFullName() + " (" + result.getData().getEmailAddress() + ")");
         } else {
-            System.out.println("Failed to connect to the server.  Check your PM_API_KEY environment variable.");
+            System.out.println("Failed to connect to the server.  Error: " + result.getError().getMessage());
         }
     }
 }

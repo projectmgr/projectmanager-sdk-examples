@@ -24,8 +24,8 @@
 
     <dependency>
       <groupId>com.projectmanager</groupId>
-      <artifactId>SDK</artifactId>
-      <version>96.0.2115.0</version>
+      <artifactId>ProjectManagerSDK</artifactId>
+      <version>96.0.2118</version>
     </dependency>
 
     <dependency>
