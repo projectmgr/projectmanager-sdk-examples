@@ -26,12 +26,18 @@ public class ExampleApp {
             .withEnvironment("production")
             .withBearerToken(key);
 
-        // Fetch me
+        // Check server connectivity
         var result = client.getMeClient().retrieveMe();
         if (result.getSuccess()) {
             System.out.println("You are logged on as " + result.getData().getFullName() + " (" + result.getData().getEmailAddress() + ")");
         } else {
             System.out.println("Failed to connect to the server.  Error: " + result.getError().getMessage());
+        }
+
+        // Retrieve tasks
+        var tasks = client.getTaskClient().queryTasks(null, null, null, null, null, null);
+        for (var task : tasks.getData()) {
+            System.out.println("Task " + task.getShortId() + " - " + task.getName());
         }
     }
 }
