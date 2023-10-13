@@ -400,3 +400,6 @@ FodyWeavers.xsd
 
 # Ignore typescript build
 typescript/dist
+
+# Ignore Java target folder
+java/target
