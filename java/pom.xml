@@ -24,8 +24,8 @@
 
     <dependency>
       <groupId>com.projectmanager</groupId>
-      <artifactId>ProjectManagerSDK</artifactId>
-      <version>96.0.2118</version>
+      <artifactId>projectmanagersdk</artifactId>
+      <version>97.0.2178</version>
     </dependency>
 
     <dependency>
@@ -53,18 +53,6 @@
             <manifest>
               <addClasspath>true</addClasspath>
               <mainClass>com.example.ExampleApp</mainClass>
-            </manifest>
-          </archive>
-        </configuration>
-      </plugin>
-      <plugin>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.2.0</version>
-        <configuration>
-          <archive>
-            <manifest>
-              <addClasspath>true</addClasspath>
-              <classpathPrefix>lib/</classpathPrefix>
             </manifest>
           </archive>
         </configuration>
