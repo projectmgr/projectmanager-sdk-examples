@@ -24,7 +24,8 @@ public class ExampleApp {
         // Construct a client to talk to the ProjectManager API
         ProjectManagerClient client = ProjectManagerClient
             .withEnvironment("production")
-            .withBearerToken(key);
+            .withBearerToken(key)
+            .withApplicationName("Example Java App");
 
         // Check server connectivity
         var result = client.getMeClient().retrieveMe();
