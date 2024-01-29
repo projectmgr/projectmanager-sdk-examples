@@ -30,7 +30,7 @@ def main():
         exit()
     print(f"Logged in as {status_results.data.fullName} ({status_results.data.emailAddress})")
 
-    tasks = client.task.query_tasks(None, None, None, None, None, None)
+    tasks = client.task.query_tasks(None, None, None, None, None)
 
     if tasks.data == None or len(tasks.data) == 0:
         print("No records found matching this query.")
