@@ -1,8 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PmTask", "PmTask\PmTask.csproj", "{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectManager.SDK", "..\..\projectmanager-sdk-csharp\src\ProjectManager.SDK.csproj", "{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}"
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33122.133
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PmTask", "PmTask\PmTask.csproj", "{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Files", "Files", "{AB9D70B6-AE84-45D0-B735-D1FBCFD2EE39}"
 	ProjectSection(SolutionItems) = preProject
@@ -21,9 +22,11 @@ Global
 		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0D4D0FA5-33FD-4A3E-BCAD-8ED64FDAAE7A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D1746D56-5D6E-4FBF-92D1-1FAC900D2D37}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {95A6CFBA-8D99-491F-A8F7-CD8752CD07D8}
 	EndGlobalSection
 EndGlobal

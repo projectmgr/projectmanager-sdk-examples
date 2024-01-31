@@ -116,7 +116,7 @@ public static class Program
         Console.WriteLine($"Task {task.Name} ({task.ShortId})");
         
         // Add discussion
-        var item = new DiscussionCreateDto()
+        var item = new DiscussionCommentCreateDto()
         {
             Text = options.Message,
         };
@@ -143,7 +143,7 @@ public static class Program
         Console.WriteLine($"Project {project.Name} ({project.ShortId})");
         
         // List all tasks within this project
-        var tasks = client.Task.QueryTasks(null, null, $"projectId eq {project.Id}", null, null, null).Result;
+        var tasks = client.Task.QueryTasks(filter: $"projectId eq {project.Id}").Result;
         foreach (var task in tasks.Data)
         {
             Console.WriteLine($"  {task.ShortId} {task.Name} ({task.PercentComplete}% complete)");

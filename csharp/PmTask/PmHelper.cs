@@ -7,7 +7,7 @@ public static class PmHelper
 {
     public static async Task<TaskDto?> FindTask(this ProjectManagerClient client, string? taskId)
     {
-        var tasks = await client.Task.QueryTasks(null, null, $"ShortId eq '{taskId}'", null, null, null);
+        var tasks = await client.Task.QueryTasks(filter: $"ShortId eq '{taskId}'");
         if (tasks == null || !tasks.Success)
         {
             Console.WriteLine($"API call failed: {tasks?.Error.Message}.");
