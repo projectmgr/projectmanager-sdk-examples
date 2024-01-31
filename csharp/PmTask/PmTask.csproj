@@ -8,12 +8,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\..\projectmanager-sdk-csharp\src\ProjectManager.SDK.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="CommandLineParser" Version="2.9.1" />
       <PackageReference Include="Microsoft.OData.Core" Version="7.17.0" />
+      <PackageReference Include="ProjectManager.SDK" Version="102.0.2949" />
       <PackageReference Include="Simple.OData.Client" Version="6.0.1" />
     </ItemGroup>
 
