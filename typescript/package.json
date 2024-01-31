@@ -15,6 +15,6 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "projectmanager-sdk": "^98.0.2363"
+    "projectmanager-sdk": "^102.0.2886"
   }
 }

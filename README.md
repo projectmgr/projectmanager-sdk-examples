@@ -9,4 +9,3 @@ This repository contains example code demonstrating the use of the ProjectManage
 | Jupyter  | [Jupyter Task DataFrame](jupyter/TaskDataFrame.ipynb) | A simple Jupyter notebook that retrieves tasks and displays them in a dataframe.<br/>Open in Visual Studio Code |
 | TypeScript | [TypeScript Task List](https://github.com/projectmgr/projectmanager-sdk-examples/blob/main/typescript/src/index.ts) | A basic program in TypeScript that demonstrates connecting and retrieving tasks.<br/>Run with `npm start` |
 | Java     | [Java Task List](java/src/main/java/com/example/ExampleApp.java) | A simple Java console application that demonstrates connecting and retrieving tasks.<br/>Run with `mvn exec:java -D"exec.mainClass=com.example.ExampleApp"` |
-
