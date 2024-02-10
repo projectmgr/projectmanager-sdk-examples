@@ -1,6 +1,7 @@
 import os
 
-# To test Python locally, uncomment these lines:
+# To test Python locally, first `pip uninstall projectmanagersdk` then uncomment these two lines.
+# Use the path here to point to your local copy of the SDK source:
 # import sys
 # sys.path.append('/github/projectmanager-sdk-python/src')
 
@@ -49,8 +50,11 @@ def main():
         exit()
     print(f"Logged in as {status_results.data.fullName} ({status_results.data.emailAddress})")
 
-    # Demonstrate querying tasks
-    tasks = client.task.query_tasks(None, None, None, None, None)
+    # What version of the SDK are we testing?
+    print(f"Testing against SDK {client.sdkVersion}")
+
+    # Demonstrate querying tasks - fetch top 10 records only
+    tasks = client.task.query_tasks(10, None, None, None, None)
 
     if tasks.data == None or len(tasks.data) == 0:
         print("No records found matching this query.")
@@ -63,9 +67,17 @@ def main():
 
     # Demonstrate creating a project
     new_project = ProjectManagerSdk.ProjectCreateDto()
-    new_project.name = "New Project"
+    new_project.name = "New Project - Python SDK"
     new_project.description = "This is my project description"
     result = client.project.create_project(new_project)
+    print(f"Result: {result}")
+
+    # Demonstrate create many tasks
+    taskList: list[ProjectManagerSdk.TaskCreateDto] = []
+    taskList.append(ProjectManagerSdk.TaskCreateDto(name = "First Task", description="Description"))
+    taskList.append(ProjectManagerSdk.TaskCreateDto(name = "Second Task", description="Description"))
+    taskList.append(ProjectManagerSdk.TaskCreateDto(name = "Third Task", description="Description"))
+    result = client.task.create_many_tasks("e349001a-6050-441f-afbf-4b79ede6c9b6", taskList)
     print(f"Result: {result}")
 
 if __name__ == '__main__':
