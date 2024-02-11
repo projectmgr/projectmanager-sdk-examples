@@ -22,7 +22,7 @@ async function DemonstrationMethod()
     console.log(`We are connected as ${result.data?.fullName} (${result.data?.emailAddress})`);
 
     // Fetch tasks
-    var tasks = await client.Task.queryTasks(null, null, null, null, null, null);
+    var tasks = await client.Task.queryTasks(10, null, null, null, null);
     tasks.data.forEach(task => {
         console.log(`Task ${task.shortId} - ${task.name}`);
     });
