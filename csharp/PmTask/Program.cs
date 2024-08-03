@@ -67,8 +67,6 @@ public static class Program
     public static async Task Main(string[] args)
     {
         var types = LoadVerbs();
-        
-        // Project related verbs
         var parsed = Parser.Default.ParseArguments(args, types);
         await parsed.WithParsedAsync<ListProjectsOptions>(ListProjects);
         await parsed.WithParsedAsync<ListTasksOptions>(ListTasks);
