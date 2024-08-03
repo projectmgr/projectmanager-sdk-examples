@@ -6,6 +6,13 @@ namespace PmTask;
 public static class PmHelper
 {
     private const int CHUNK_SIZE = 1000;
+    
+    /// <summary>
+    /// Loads in a collection of projects using pagination
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
     public static async Task<List<ProjectDto>?> LoadProjects(this ProjectManagerClient client, string? filter)
     {
         var list = new List<ProjectDto>();
@@ -18,15 +25,21 @@ public static class PmHelper
                 return null;
             }
 
-            if (projects.Data.Length == 0)
+            list.AddRange(projects.Data);
+
+            if (projects.Data.Length < CHUNK_SIZE)
             {
                 return list;
             }
-
-            list.AddRange(projects.Data);
         }
     }
     
+    /// <summary>
+    /// Loads in a collection of tasks using pagination
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
     public static async Task<List<TaskDto>?> LoadTasks(this ProjectManagerClient client, string? filter)
     {
         var list = new List<TaskDto>();
@@ -39,12 +52,12 @@ public static class PmHelper
                 return null;
             }
 
-            if (tasks.Data.Length == 0)
+            list.AddRange(tasks.Data);
+            
+            if (tasks.Data.Length < CHUNK_SIZE)
             {
                 return list;
             }
-
-            list.AddRange(tasks.Data);
         }
     }
 }

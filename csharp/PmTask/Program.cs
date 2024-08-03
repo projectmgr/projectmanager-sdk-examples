@@ -129,6 +129,7 @@ public static class Program
                 var tasks = await client.LoadTasks($"projectId eq {project.Id}");
                 if (tasks != null)
                 {
+                    tasks.Sort(new WbsSortHelper());
                     Console.WriteLine($"Found {tasks.Count} tasks.");
                     foreach (var task in tasks)
                     {
