@@ -85,17 +85,14 @@ public static class Program
         var client = await MakeClient(options);
         if (client != null)
         {
-            var projects = await client.Project.QueryProjects(1000, 0);
-            if (!projects.Success)
+            var projects = await client.LoadProjects(null);
+            if (projects != null)
             {
-                Console.WriteLine($"Error: {projects.Error.Message}");
-                return;
-            }
-
-            Console.WriteLine($"Found {projects.Data.Length} projects:");
-            foreach (var project in projects.Data)
-            {
-                Console.WriteLine($"* {project.ShortId} - {project.Name}");
+                Console.WriteLine($"Found {projects.Count} projects:");
+                foreach (var project in projects)
+                {
+                    Console.WriteLine($"* {project.ShortId} - {project.Name}");
+                }
             }
         }
     }
@@ -105,19 +102,19 @@ public static class Program
         var client = await MakeClient(options);
         if (client != null)
         {
-            var projects = await client.Project.QueryProjects(1000, 0, $"(ShortId eq '{options.Project}' OR Name eq '{options.Project}')");
-            if (!projects.Success)
+            var projects = await client.LoadProjects($"(ShortId eq '{options.Project}' OR Name eq '{options.Project}')");
+            if (projects == null)
             {
-                Console.WriteLine($"Failed to query projects: {projects.Error.Message}");
+                return;
             } 
-            else if (projects.Data == null || projects.Data.Length == 0)
+            else if (projects.Count == 0)
             {
                 Console.WriteLine("Found no matching projects.");
             } 
-            else if (projects.Data.Length > 1)
+            else if (projects.Count > 1)
             {
                 Console.WriteLine("Found multiple matches.");
-                foreach (var item in projects.Data)
+                foreach (var item in projects)
                 {
                     Console.WriteLine($"* {item.ShortId} - {item.ShortCode} - {item.Name}");
                 }
@@ -125,15 +122,19 @@ public static class Program
             else
             {
                 // Print out information about this project
-                var project = projects.Data[0];
+                var project = projects[0];
                 Console.WriteLine($"Project {project.Name} ({project.ShortId})");
 
                 // List all tasks within this project
-                var tasks = await client.Task.QueryTasks(1000, 0, filter: $"projectId eq {project.Id}");
-                Console.WriteLine($"Found {tasks.Data.Length} tasks.");
-                foreach (var task in tasks.Data)
+                var tasks = await client.LoadTasks($"projectId eq {project.Id}");
+                if (tasks != null)
                 {
-                    Console.WriteLine($"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
+                    Console.WriteLine($"Found {tasks.Count} tasks.");
+                    foreach (var task in tasks)
+                    {
+                        Console.WriteLine(
+                            $"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
+                    }
                 }
             }
         }
