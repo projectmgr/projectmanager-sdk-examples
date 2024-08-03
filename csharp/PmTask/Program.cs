@@ -34,11 +34,16 @@ public static class Program
     {
         [Option("project", Required = true, HelpText = "The name, ID, or ShortCode of the project")]
         public string? Project { get; set; }
+        
+        [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]
+        public OutputFormat? Format { get; set; }
     }
     
     [Verb("list-projects", HelpText = "List projects")]
     private class ListProjectsOptions : BaseOptions
     {
+        [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]
+        public OutputFormat? Format { get; set; }
     }
     
     [Verb("read-comments", HelpText = "Read all discussion comments about a task")]
@@ -46,6 +51,9 @@ public static class Program
     {
         [Option("task", Required = true, HelpText = "The ShortID of the task to review discussion")]
         public string? Task { get; set; }
+        
+        [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]
+        public OutputFormat? Format { get; set; }
     }
     
     [Verb("add-comment", HelpText = "Add a comment to a task")]
@@ -83,10 +91,17 @@ public static class Program
             var projects = await client.LoadProjects(null);
             if (projects != null)
             {
-                Console.WriteLine($"Found {projects.Count} projects:");
-                foreach (var project in projects)
+                if (options.Format == null)
                 {
-                    Console.WriteLine($"* {project.ShortId} - {project.Name}");
+                    options.Format.WriteLine($"Found {projects.Count} projects:");
+                    foreach (var project in projects)
+                    {
+                        options.Format.WriteLine($"* {project.ShortId} - {project.Name}");
+                    }
+                }
+                else
+                {
+                    OutputHelper.WriteItems(projects, options.Format);
                 }
             }
         }
@@ -100,18 +115,26 @@ public static class Program
             var project = await client.FindOneProject($"(ShortId eq '{options.Project}' OR Name eq '{options.Project}')");
             if (project != null)
             {
-                Console.WriteLine($"Project {project.Name} ({project.ShortId})");
+                options.Format.WriteLine($"Project {project.Name} ({project.ShortId})");
 
                 // List all tasks within this project
                 var tasks = await client.LoadTasks($"projectId eq {project.Id}");
                 if (tasks != null)
                 {
                     tasks.Sort(new WbsSortHelper());
-                    Console.WriteLine($"Found {tasks.Count} tasks.");
-                    foreach (var task in tasks)
+                    OutputHelper.WriteItems(tasks, options.Format);
+                    if (options.Format == null)
                     {
-                        Console.WriteLine(
-                            $"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
+                        Console.WriteLine($"Found {tasks.Count} tasks.");
+                        foreach (var task in tasks)
+                        {
+                            Console.WriteLine(
+                                $"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
+                        }
+                    }
+                    else
+                    {
+                        OutputHelper.WriteItems(tasks, options.Format);
                     }
                 }
             }
@@ -131,19 +154,26 @@ public static class Program
 
                 // Retrieve discussions
                 var discussions = await client.Discussion.RetrieveTaskComments(item.Id!.Value);
-                if (discussions.Data.Length == 0)
+                if (options.Format == null)
                 {
-                    Console.WriteLine("No comments.");
-                }
-
-                foreach (var comment in discussions.Data)
-                {
-                    Console.WriteLine($"On {comment.CreateDate} {comment.AuthorName} wrote:");
-                    Console.WriteLine("  " + comment.Text);
-                    foreach (var reaction in comment.Emoji ?? Array.Empty<DiscussionEmoji>())
+                    if (discussions.Data.Length == 0)
                     {
-                        Console.WriteLine($"Reaction: {reaction.Name} ({reaction.UserIds.Length})");
+                        Console.WriteLine("No comments.");
                     }
+
+                    foreach (var comment in discussions.Data)
+                    {
+                        Console.WriteLine($"On {comment.CreateDate} {comment.AuthorName} wrote:");
+                        Console.WriteLine("  " + comment.Text);
+                        foreach (var reaction in comment.Emoji ?? Array.Empty<DiscussionEmoji>())
+                        {
+                            Console.WriteLine($"Reaction: {reaction.Name} ({reaction.UserIds.Length})");
+                        }
+                    }
+                }
+                else
+                {
+                    OutputHelper.WriteItems(discussions.Data, options.Format);
                 }
             }
         }
@@ -228,10 +258,10 @@ public static class Program
         var me = await client.Me.RetrieveMe();
         if (me.Success)
         {
-            Console.WriteLine($"Logged on as {me.Data.EmailAddress} ({me.Data.RoleName}) in workspace {me.Data.WorkSpaceName}.");
+            Console.Error.WriteLine($"Logged on as {me.Data.EmailAddress} ({me.Data.RoleName}) in workspace {me.Data.WorkSpaceName}.");
             return client;
         }
-        Console.WriteLine($"Failed to verify credentials: {me.Error.Message}");
+        Console.Error.WriteLine($"Failed to verify credentials: {me.Error.Message}");
         return null;
     }
 }
