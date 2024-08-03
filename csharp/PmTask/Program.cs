@@ -31,11 +31,16 @@ public static class Program
         public string? Priority { get; set; }
     }
     
-    [Verb("list", HelpText = "List tasks within a project")]
-    private class ListOptions : BaseOptions
+    [Verb("list-tasks", HelpText = "List tasks within a project")]
+    private class ListTasksOptions : BaseOptions
     {
-        [Option("project", HelpText = "The name, ID, or ShortID of the project in which to create the task")]
+        [Option("project", Required = true, HelpText = "The name, ID, or ShortCode of the project")]
         public string? Project { get; set; }
+    }
+    
+    [Verb("list-projects", HelpText = "List projects")]
+    private class ListProjectsOptions : BaseOptions
+    {
     }
     
     [Verb("discuss", HelpText = "Read all discussion comments about a task")]
@@ -61,17 +66,80 @@ public static class Program
             .Where(t => t.GetCustomAttribute<VerbAttribute>() != null).ToArray();		 
     }
     
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        var types = LoadVerbs();	
-        Parser.Default.ParseArguments(args, types)
-            .WithParsed<CreateOptions>(CreateTask)
-            .WithParsed<ListOptions>(ListTask)
-            .WithParsed<DiscussOptions>(DiscussTask)
-            .WithParsed<CommentOptions>(CommentTask)
-            .WithNotParsed(HandleErrors);
+        var types = LoadVerbs();
+        
+        // Project related verbs
+        var parsed = Parser.Default.ParseArguments(args, types);
+        await parsed.WithParsedAsync<ListProjectsOptions>(ListProjects);
+        await parsed.WithParsedAsync<ListTasksOptions>(ListTasks);
+            // .WithParsed<CreateOptions>(CreateTask)
+            // .WithParsed<ListOptions>(ListTask)
+            // .WithParsed<DiscussOptions>(DiscussTask)
+            // .WithParsed<CommentOptions>(CommentTask)
     }
 
+    private static async Task ListProjects(ListProjectsOptions options)
+    {
+        var client = await MakeClient(options);
+        if (client != null)
+        {
+            var projects = await client.Project.QueryProjects(1000, 0);
+            if (!projects.Success)
+            {
+                Console.WriteLine($"Error: {projects.Error.Message}");
+                return;
+            }
+
+            Console.WriteLine($"Found {projects.Data.Length} projects:");
+            foreach (var project in projects.Data)
+            {
+                Console.WriteLine($"* {project.ShortId} - {project.Name}");
+            }
+        }
+    }
+    
+    private static async Task ListTasks(ListTasksOptions options)
+    {
+        var client = await MakeClient(options);
+        if (client != null)
+        {
+            var projects = await client.Project.QueryProjects(1000, 0, $"(ShortId eq '{options.Project}' OR Name eq '{options.Project}')");
+            if (!projects.Success)
+            {
+                Console.WriteLine($"Failed to query projects: {projects.Error.Message}");
+            } 
+            else if (projects.Data == null || projects.Data.Length == 0)
+            {
+                Console.WriteLine("Found no matching projects.");
+            } 
+            else if (projects.Data.Length > 1)
+            {
+                Console.WriteLine("Found multiple matches.");
+                foreach (var item in projects.Data)
+                {
+                    Console.WriteLine($"* {item.ShortId} - {item.ShortCode} - {item.Name}");
+                }
+            }
+            else
+            {
+                // Print out information about this project
+                var project = projects.Data[0];
+                Console.WriteLine($"Project {project.Name} ({project.ShortId})");
+
+                // List all tasks within this project
+                var tasks = await client.Task.QueryTasks(1000, 0, filter: $"projectId eq {project.Id}");
+                Console.WriteLine($"Found {tasks.Data.Length} tasks.");
+                foreach (var task in tasks.Data)
+                {
+                    Console.WriteLine($"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
+                }
+            }
+        }
+    }
+    
+    /*
     private static void DiscussTask(DiscussOptions options)
     {
         // Fetch project and task
@@ -130,27 +198,6 @@ public static class Program
         Console.WriteLine($"Added discussion comment {result.Data.DiscussionCommentId}.");
     }
 
-    private static void ListTask(ListOptions options)
-    {
-        var client = MakeClient(options);
-        var project = client.FindProject(options.Project).Result;
-        if (project == null)
-        {
-            return;
-        }
-
-        // Print out information about this project
-        Console.WriteLine($"Project {project.Name} ({project.ShortId})");
-        
-        // List all tasks within this project
-        var tasks = client.Task.QueryTasks(filter: $"projectId eq {project.Id}").Result;
-        foreach (var task in tasks.Data)
-        {
-            Console.WriteLine($"  {task.ShortId} {task.Name} ({task.PercentComplete}% complete)");
-        }
-
-        Console.WriteLine($"  {tasks.Data.Length} tasks.");
-    }
     private static void HandleErrors(IEnumerable<Error> errors)
     {
         var errList = errors.ToList();
@@ -182,14 +229,37 @@ public static class Program
         }
         Console.WriteLine($"Created task {options.TaskName}: {task.Data.Id}");
     }
-
-    private static ProjectManagerClient MakeClient(BaseOptions options)
+*/
+    private static async Task<ProjectManagerClient?> MakeClient(BaseOptions options)
     {
+        ProjectManagerClient client;
+        
+        // Construct client
         var apiKey = options.ApiKey ?? Environment.GetEnvironmentVariable("PM_API_KEY");
-        var env = options.Env ?? Environment.GetEnvironmentVariable("PM_ENV");
-        return ProjectManagerClient
-            .WithCustomEnvironment(env)
-            .WithBearerToken(apiKey)
-            .WithAppName("PmTask");
+        var environmentString = options.Env ?? Environment.GetEnvironmentVariable("PM_ENV");
+        if (environmentString != null)
+        {
+            client = ProjectManagerClient
+                .WithCustomEnvironment(new Uri(environmentString))
+                .WithBearerToken(apiKey)
+                .WithAppName("PmTask");
+        }
+        else
+        {
+            client = ProjectManagerClient
+                .WithEnvironment("production")
+                .WithBearerToken(apiKey)
+                .WithAppName("PmTask");
+        }
+
+        // Verify it's working
+        var me = await client.Me.RetrieveMe();
+        if (me.Success)
+        {
+            Console.WriteLine($"Logged on as {me.Data.EmailAddress} ({me.Data.RoleName}) in workspace {me.Data.WorkSpaceName}.");
+            return client;
+        }
+        Console.WriteLine($"Failed to verify credentials: {me.Error.Message}");
+        return null;
     }
 }
