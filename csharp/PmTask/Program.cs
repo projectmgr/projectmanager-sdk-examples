@@ -15,10 +15,10 @@ public static class Program
         public string? Env { get; set; }
     }
     
-    [Verb("create", HelpText = "Create a new task")]
-    private class CreateOptions : BaseOptions
+    [Verb("create-task", HelpText = "Create one or more tasks")]
+    private class CreateTaskOptions : BaseOptions
     {
-        [Option("project", HelpText = "The name, ID, or ShortID of the project in which to create the task")]
+        [Option("project", Required = true, HelpText = "The name, ID, or ShortID of the project in which to create the task")]
         public string? Project { get; set; }
         
         [Option("name", HelpText = "Name of the task")]
@@ -27,8 +27,6 @@ public static class Program
         [Option("desc", HelpText = "Description of the task")]
         public string? Description { get; set; }
         
-        [Option("pri", HelpText = "Priority of the task")]
-        public string? Priority { get; set; }
     }
     
     [Verb("list-tasks", HelpText = "List tasks within a project")]
@@ -76,9 +74,7 @@ public static class Program
         await parsed.WithParsedAsync<ListTasksOptions>(ListTasks);
         await parsed.WithParsedAsync<ReadCommentsOptions>(ReadComments);
         await parsed.WithParsedAsync<AddCommentOptions>(AddComment);
-        // .WithParsed<CreateOptions>(CreateTask)
-        // .WithParsed<ListOptions>(ListTask)
-        // .WithParsed<CommentOptions>(CommentTask)
+        await parsed.WithParsedAsync<CreateTaskOptions>(CreateTask);
     }
 
     private static async Task ListProjects(ListProjectsOptions options)
@@ -182,39 +178,32 @@ public static class Program
             }
         }
     }
-/*
-    private static void HandleErrors(IEnumerable<Error> errors)
+
+    private static async Task CreateTask(CreateTaskOptions options)
     {
-        var errList = errors.ToList();
-        Console.WriteLine($"Found {errList.Count} errors.");
+        var client = await MakeClient(options);
+        if (client != null)
+        {
+            var project = await client.FindOneProject($"(ShortId eq '{options.Project}' OR Name eq '{options.Project}')");
+            if (project != null)
+            {
+                // Create a task for this project
+                var info = new TaskCreateDto()
+                {
+                    Name = options.TaskName,
+                    Description = options.Description,
+                };
+                var task = await client.Task.CreateTask(project.Id!.Value, info);
+                if (!task.Success)
+                {
+                    Console.WriteLine($"Could not create task {options.TaskName}: {task.Error.Message}");
+                    return;
+                }
+                Console.WriteLine($"Created task {options.TaskName}: {task.Data.Id}");
+            }
+        }
     }
 
-    private static void CreateTask(CreateOptions options)
-    {
-        var client = MakeClient(options);
-        
-        // Fetch all projects and find the one that matches locally so we can give debugging information
-        var project = client.FindProject(options.Project).Result;
-        if (project?.Id == null)
-        {
-            return;
-        }
-        
-        // Create a task for this project
-        var info = new TaskCreateDto()
-        {
-            Name = options.TaskName,
-            Description = options.Description,
-        };
-        var task = client.Task.CreateTask(project.Id.Value, info).Result;
-        if (!task.Success)
-        {
-            Console.WriteLine($"Could not create task {options.TaskName}: {task.Error.Message}");
-            return;
-        }
-        Console.WriteLine($"Created task {options.TaskName}: {task.Data.Id}");
-    }
-*/
     private static async Task<ProjectManagerClient?> MakeClient(BaseOptions options)
     {
         ProjectManagerClient client;
