@@ -66,11 +66,24 @@ public static class Program
     [Verb("list-tasks", HelpText = "List tasks within a project")]
     private class ListTasksOptions : BaseOptions
     {
-        [Option("project", Required = true, HelpText = "The name, ID, or ShortCode of the project")]
+        [Option("project", Required = true, HelpText = "The name, ID, or ShortCode of the project.")]
         public string? Project { get; set; }
         
         [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]
         public OutputFormat? Format { get; set; }
+        
+        [Option('q', "query", HelpText = "A query to specify the tasks to retrieve")]
+        public string? Query { get; set; }
+    }
+    
+    [Verb("query-tasks", HelpText = "Query for tasks")]
+    private class QueryTasksOptions : BaseOptions
+    {
+        [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]
+        public OutputFormat? Format { get; set; }
+
+        [Option('q', "query", Required = true, HelpText = "A query to specify the tasks to retrieve")]
+        public string Query { get; set; } = default!;
     }
     
     [Verb("list-projects", HelpText = "List projects")]
@@ -112,6 +125,7 @@ public static class Program
         var parsed = Parser.Default.ParseArguments(args, types);
         await parsed.WithParsedAsync<ListProjectsOptions>(ListProjects);
         await parsed.WithParsedAsync<ListTasksOptions>(ListTasks);
+        await parsed.WithParsedAsync<QueryTasksOptions>(QueryTasks);
         await parsed.WithParsedAsync<ReadCommentsOptions>(ReadComments);
         await parsed.WithParsedAsync<AddCommentOptions>(AddComment);
         await parsed.WithParsedAsync<CreateTaskOptions>(CreateTask);
@@ -286,7 +300,7 @@ public static class Program
                     options.Format.WriteLine($"Found {projects.Count} projects:");
                     foreach (var project in projects)
                     {
-                        options.Format.WriteLine($"* {project.ShortId} - {project.Name}");
+                        options.Format.WriteLine($"* {project.ShortId} - {project.Name} ({project.Id})");
                     }
                 }
                 else
@@ -315,17 +329,45 @@ public static class Program
                     OutputHelper.WriteItems(tasks, options.Format);
                     if (options.Format == null)
                     {
-                        Console.WriteLine($"Found {tasks.Count} tasks.");
                         foreach (var task in tasks)
                         {
                             Console.WriteLine(
                                 $"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
                         }
+                        Console.WriteLine($"Total {tasks.Count} tasks.");
                     }
                     else
                     {
                         OutputHelper.WriteItems(tasks, options.Format);
                     }
+                }
+            }
+        }
+    }
+    
+    private static async Task QueryTasks(QueryTasksOptions options)
+    {
+        var client = await MakeClient(options);
+        if (client != null)
+        {
+            // List all tasks within this project
+            var tasks = await client.LoadTasks(options.Query);
+            if (tasks != null)
+            {
+                tasks.Sort(new WbsSortHelper());
+                OutputHelper.WriteItems(tasks, options.Format);
+                if (options.Format == null)
+                {
+                    foreach (var task in tasks)
+                    {
+                        Console.WriteLine(
+                            $"* {task.Wbs} - {task.ShortId} - {task.Name} ({task.PercentComplete}% complete)");
+                    }
+                    Console.WriteLine($"Total {tasks.Count} tasks.");
+                }
+                else
+                {
+                    OutputHelper.WriteItems(tasks, options.Format);
                 }
             }
         }
