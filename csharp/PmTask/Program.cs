@@ -1,8 +1,16 @@
 ﻿using System.Reflection;
+using System.Text.Json;
+using System.Web;
 using CommandLine;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileSystemGlobbing;
 using PmTask;
+using PmTask.Sync;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
+using SonarCloud.NET;
+using SonarCloud.NET.Extensions;
+using SonarCloud.NET.Models;
 
 public static class Program
 {
@@ -13,6 +21,32 @@ public static class Program
         
         [Option('e', "env", HelpText = "The URL of the ProjectManager environment to use.  If not specified, uses the environment variable PM_ENV.")]
         public string? Env { get; set; }
+    }
+    
+    [Verb("git-blame-files", HelpText = "Import issues using a file pattern and git blame")]
+    private class GitBlameFileOptions : BaseOptions
+    {
+        [Option("pattern", HelpText = "The file pattern to scan. Multiple patterns are separated by commas.")]
+        public string? Pattern { get; set; }
+
+        [Option("folder", HelpText = "The folder to scan")]
+        public string? Folder { get; set; }
+
+        [Option("pmproject", HelpText = "The ProjectManager project code")]
+        public string? PmProject { get; set; }
+    }
+    
+    [Verb("sonarcloud", HelpText = "Import issues from SonarCloud.io")]
+    private class SonarCloudOptions : BaseOptions
+    {
+        [Option('s', "sonar_token", HelpText = "SonarCloud API token")]
+        public string ScApiKey { get; set; } = string.Empty;
+
+        [Option("scproject", Required = true, HelpText = "The SonarCloud.io project code")]
+        public string ScProject { get; set; } = default!;
+
+        [Option("pmproject", Required = true, HelpText = "The ProjectManager project code")]
+        public string PmProject { get; set; } = default!;
     }
     
     [Verb("create-task", HelpText = "Create one or more tasks")]
@@ -81,8 +115,164 @@ public static class Program
         await parsed.WithParsedAsync<ReadCommentsOptions>(ReadComments);
         await parsed.WithParsedAsync<AddCommentOptions>(AddComment);
         await parsed.WithParsedAsync<CreateTaskOptions>(CreateTask);
+        await parsed.WithParsedAsync<SonarCloudOptions>(ImportSonarCloud);
+        await parsed.WithParsedAsync<GitBlameFileOptions>(GitBlameFiles);
+    }
+    
+    private static async Task GitBlameFiles(GitBlameFileOptions options)
+    {
+        if (options.Pattern == null)
+        {
+            Console.WriteLine("Please specify a file pattern using globbing options.");
+            return;
+        }
+
+        if (options.Folder == null)
+        {
+            Console.WriteLine("Please specify a folder to search for files of this type.");
+            return;
+        }
+
+        // Find files matching the globbing pattern
+        Console.WriteLine($"Searching {options.Folder} for files matching {options.Pattern}...");
+        var patterns =
+            options.Pattern.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        Matcher matcher = new();
+        matcher.AddIncludePatterns(patterns);
+
+        // Convert all these matches to tasks to sync
+        List<RemoteSystemTaskModel> list = new();
+        foreach (var file in matcher.GetResultsInFullPath(options.Folder))
+        {
+            // Gather stats on this file
+            var fileInfo = new FileInfo(file);
+
+            // Gather github most recent change on this file
+            var gitInfo = await RunProcessAsTask.ProcessEx.RunAsync("git", $"log -n 1 \"{file}\"");
+            var blame = gitInfo == null
+                ? string.Empty
+                : $"\nLast Change:\n\n{string.Join("\n", gitInfo.StandardOutput)}";
+
+            // Construct a task for it
+            var item = new TaskCreateDto()
+            {
+                Name = $"Migration: {fileInfo.Name}",
+                Description =
+                    $"* **Directory**: {fileInfo.Directory}\n" +
+                    $"* **File**: {fileInfo.Name} ({fileInfo.Length} bytes)\n" +
+                    $"* **Last Modified**: {fileInfo.LastWriteTimeUtc}\n{blame}",
+            };
+            list.Add(new RemoteSystemTaskModel()
+            {
+                UniqueId = file,
+                TaskCreate = item,
+            });
+        }
+
+        // Sync with ProjectManager
+        // Console.WriteLine($"Syncing with ProjectManager Project '{options.PmProject}'...");
+        // var pmClient = MakeClient(options);
+        // var results = await RemoteTaskSync.SyncRemoteTasks(list, pmClient, options.PmProject ?? string.Empty);
+        // if (results.Success)
+        // {
+        //     Console.WriteLine("Success.");
+        //     Console.WriteLine($"{results.TasksCreated} task(s) created, {results.TasksUpdated} task(s) updated, and {results.TasksDeleted} task(s) deleted.");
+        // }
+        // else
+        // {
+        //     Console.WriteLine("Failed.");
+        // }
+    }
+    
+    private static async Task ImportSonarCloud(SonarCloudOptions options)
+    {
+        var pmClient = await MakeClient(options);
+        if (pmClient == null)
+        {
+            return;
+        }
+
+        // Fetch tasks from SonarCloud
+        var sc = new ServiceCollection();
+        sc.AddSonarCloudClient(cfg => cfg.AccessToken = options.ScApiKey);
+        sc.AddLogging();
+        var provider = sc.BuildServiceProvider();
+        var sonarClient = provider.GetService<ISonarCloudApiClient>();
+        if (sonarClient == null)
+        {
+            Console.WriteLine("Failed to create SonarCloud API client.");
+            return;
+        }
+        
+        // Fetch all hotspots
+        var hotspots = new List<Hotspot>();
+        int page = 1;
+        int pageSize = 100;
+        while (true)
+        {
+            var sonarResults = await sonarClient.Hotspots.Search(new HotspotsSearchRequest()
+            {
+                ProjectKey = options.ScProject,
+                PageSize = pageSize,
+                Page = page++,
+            });
+            hotspots.AddRange(sonarResults.Hotspots);
+            Console.WriteLine($"Fetched {hotspots.Count} hotspots...");
+            if (sonarResults.Hotspots.Length < pageSize)
+            {
+                break;
+            }
+        }
+        
+        // Convert HotSpots into PM Tasks
+        var list = new List<RemoteSystemTaskModel>();
+        foreach (var item in hotspots)
+        {
+            var taskCreate = new TaskCreateDto()
+            {
+                Name = $"[{item.VulnerabilityProbability}] - {item.Message}",
+                Description =
+                    $"- **Problem**: {HttpUtility.HtmlEncode(item.Message)}\n" +
+                    $"- **Source**: {item.Component.Replace(item.Project + ":", "")} Line {item.Line}\n" +
+                    $"- **Detected**: {item.CreationDate}\n" +
+                    $"- **Blame**: {item.Author}\n" +
+                    $"- **Link**: https://sonarcloud.io/project/security_hotspots?id={item.Project}&hotspots={item.Key}\n" +
+                    $"- **SonarCloud ID**: {item.Key}",
+                // TODO: TaskCreate doesn't allow you to set color yet
+                // Color = GetColor(item.vulnerabilityProbability),
+            };
+            list.Add(new RemoteSystemTaskModel() { UniqueId = item.Key, TaskCreate = taskCreate });
+        }
+
+        // Sync this with ProjectManager
+        Console.WriteLine($"Syncing with ProjectManager Project '{options.PmProject}'...");
+        var results = await RemoteTaskSync.SyncRemoteTasks(list, pmClient, options.PmProject);
+        if (results.Success)
+        {
+            Console.WriteLine("Success.");
+            Console.WriteLine($"{results.TasksCreated} task(s) created, {results.TasksUpdated} task(s) updated, and {results.TasksDeleted} task(s) deleted.");
+        }
+        else
+        {
+            Console.WriteLine("Failed.");
+        }
     }
 
+    private static string GetColor(string severity)
+    {
+        switch (severity)
+        {
+            case "HIGH":
+                return "#FF0000"; // Bright red
+            case "CRITICAL":
+                return "#7D0000"; // Dark red
+            case "MEDIUM":
+                return "#F9FF39"; // Yellow
+            default:
+                return string.Empty;
+        }
+    }
+    
     private static async Task ListProjects(ListProjectsOptions options)
     {
         var client = await MakeClient(options);

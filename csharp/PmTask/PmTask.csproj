@@ -11,8 +11,14 @@
     <ItemGroup>
       <PackageReference Include="CommandLineParser" Version="2.9.1" />
       <PackageReference Include="CSVFile" Version="3.2.0" />
+      <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="8.0.0" />
       <PackageReference Include="ProjectManager.SDK" Version="114.0.4169" />
+      <PackageReference Include="RunProcessAsTask" Version="1.2.4" />
       <PackageReference Include="Simple.OData.Client" Version="6.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\..\SonarCloud.NET\src\SonarCloud.NET\SonarCloud.NET.csproj" />
     </ItemGroup>
 
 </Project>

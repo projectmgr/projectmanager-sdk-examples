@@ -18,6 +18,7 @@ public static class OutputHelper
     {
         var settings = new CSVSettings()
         {
+            HeaderRowIncluded = true,
             NestedArrayBehavior = ArrayOptions.RecursiveSerialization,
             NestedObjectBehavior = ObjectOptions.RecursiveSerialization,
         };
