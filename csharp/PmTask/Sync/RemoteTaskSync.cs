@@ -85,7 +85,8 @@ public class RemoteTaskSync
                 // Is the task's description still current?
                 if (!cleansedDescription.StartsWith(item.TaskCreate.Description, StringComparison.OrdinalIgnoreCase) 
                     || matchedTask.PriorityId != item.TaskCreate.PriorityId
-                    || matchedTask.Color != item.TaskCreate.Theme)
+                    //|| matchedTask.Color != item.TaskCreate.Theme
+                    )
                 {
                     tasksToUpdate.Add(matchedTask.Id.Value,
                         new TaskUpdateDto()
