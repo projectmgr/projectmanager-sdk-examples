@@ -277,8 +277,7 @@ public static class Program
                     $"- **SonarCloud ID**: {item.Key}",
                 PriorityId = GetPriorityId(item, priorities),
                 Assignees = FindAssigneeByEmail(item.Author, null, resources),
-                // TODO: TaskCreate doesn't allow you to set color yet
-                // Color = GetColor(item.vulnerabilityProbability),
+                Theme = GetThemeFromSeverity(item.VulnerabilityProbability),
             };
             list.Add(new RemoteSystemTaskModel() { UniqueId = item.Key, TaskCreate = taskCreate });
         }
@@ -344,18 +343,18 @@ public static class Program
         return priority?.Id;
     }
 
-    private static string GetColor(string severity)
+    private static string? GetThemeFromSeverity(string severity)
     {
-        switch (severity)
+        switch (severity.ToUpper())
         {
             case "HIGH":
-                return "#FF0000"; // Bright red
+                return "Red";
             case "CRITICAL":
-                return "#7D0000"; // Dark red
+                return "Orange";
             case "MEDIUM":
-                return "#F9FF39"; // Yellow
+                return "Yellow";
             default:
-                return string.Empty;
+                return null;
         }
     }
     
