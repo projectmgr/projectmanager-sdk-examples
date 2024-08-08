@@ -83,17 +83,19 @@ public class RemoteTaskSync
                     .Replace("\\*", "*");
 
                 // Is the task's description still current?
-                if (!cleansedDescription.StartsWith(item.TaskCreate.Description, StringComparison.OrdinalIgnoreCase))
+                if (!cleansedDescription.StartsWith(item.TaskCreate.Description, StringComparison.OrdinalIgnoreCase) 
+                    || matchedTask.PriorityId != item.TaskCreate.PriorityId)
                 {
-                    // Should always be true but let's be safe
-                    if (matchedTask.Id.HasValue)
-                    {
-                        tasksToUpdate.Add(matchedTask.Id.Value,
-                            new TaskUpdateDto() { Name = item.TaskCreate.Name, Description = item.TaskCreate.Description });
-                    }
+                    tasksToUpdate.Add(matchedTask.Id.Value,
+                        new TaskUpdateDto()
+                        {
+                            Name = item.TaskCreate.Name, 
+                            Description = item.TaskCreate.Description,
+                            PriorityId = item.TaskCreate.PriorityId
+                        });
                 }
                 
-                // Is this task assigned to the correct people?
+                // Is this task assigned to the correct people?  This can't be done with TaskUpdate
                 if (!AssigneesMatch(matchedTask.Assignees.Select(a => a.Id!.Value).ToArray(), item.TaskCreate.Assignees))
                 {
                     var newAssignees = item.TaskCreate.Assignees.Select(a => new AssigneeUpsertDto() { Id = a })
@@ -105,7 +107,7 @@ public class RemoteTaskSync
                             $"Error assigning task {matchedTask.ShortId} to user {item.TaskCreate.Assignees}: {result.Error.Message}");
                     }
                 }
-
+                
                 // This task is still valid, as far as SonarCloud is concerned
                 tasksToDelete.Remove(matchedTask);
             }
