@@ -1,17 +1,13 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
-using System.Text.Json;
 using System.Web;
 using CommandLine;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileSystemGlobbing;
 using PmTask;
+using PmTask.SonarClient;
 using PmTask.Sync;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
-using SonarCloud.NET;
-using SonarCloud.NET.Extensions;
-using SonarCloud.NET.Models;
 
 public static class Program
 {
@@ -216,36 +212,15 @@ public static class Program
         }
 
         // Fetch tasks from SonarCloud
-        var sc = new ServiceCollection();
-        sc.AddSonarCloudClient(cfg => cfg.AccessToken = options.ScApiKey);
-        sc.AddLogging();
-        var provider = sc.BuildServiceProvider();
-        var sonarClient = provider.GetService<ISonarCloudApiClient>();
-        if (sonarClient == null)
-        {
-            Console.WriteLine("Failed to create SonarCloud API client.");
-            return;
-        }
+        var sonarClient = new SonarClient(options.ScApiKey);
         
         // Fetch all hotspots
-        var hotspots = new List<Hotspot>();
-        int page = 1;
-        int pageSize = 100;
-        while (true)
+        var hotspots = await sonarClient.GetHotspots(options.ScProject);
+        if (hotspots == null)
         {
-            var sonarResults = await sonarClient.Hotspots.Search(new HotspotsSearchRequest()
-            {
-                ProjectKey = options.ScProject,
-                PageSize = pageSize,
-                Page = page++,
-            });
-            hotspots.AddRange(sonarResults.Hotspots);
-            Console.WriteLine($"Fetched {hotspots.Count} hotspots...");
-            if (sonarResults.Hotspots.Length < pageSize)
-            {
-                break;
-            }
+            return;
         }
+        Console.WriteLine($"Fetched {hotspots.Count} hotspots...");
         
         // Fetch priorities & resources
         var resources = await pmClient.LoadResources(null);
@@ -267,19 +242,19 @@ public static class Program
         {
             var taskCreate = new TaskCreateDto()
             {
-                Name = $"[{item.VulnerabilityProbability}] - {item.Message}",
+                Name = $"[{item.vulnerabilityProbability}] - {item.message}",
                 Description =
-                    $"- **Problem**: {HttpUtility.HtmlEncode(item.Message)}\n" +
-                    $"- **Source**: {item.Component.Replace(item.Project + ":", "")} Line {item.Line}\n" +
-                    $"- **Detected**: {item.CreationDate}\n" +
-                    $"- **Blame**: {item.Author}\n" +
-                    $"- **Link**: [https://sonarcloud.io/project/security_hotspots?id={item.Project}&hotspots={item.Key}]\n" +
-                    $"- **SonarCloud ID**: {item.Key}",
-                PriorityId = GetPriorityId(item, priorities),
-                Assignees = FindAssigneeByEmail(item.Author, null, resources),
-                Theme = GetThemeFromSeverity(item.VulnerabilityProbability),
+                    $"- **Problem**: {HttpUtility.HtmlEncode(item.message)}\n" +
+                    $"- **Source**: {item.component.Replace(item.project + ":", "")} Line {item.line}\n" +
+                    $"- **Detected**: {item.creationDate}\n" +
+                    $"- **Blame**: {item.author}\n" +
+                    $"- **Link**: [https://sonarcloud.io/project/security_hotspots?id={item.project}&hotspots={item.key}]\n" +
+                    $"- **SonarCloud ID**: {item.key}",
+                PriorityId = GetPriorityId(item.vulnerabilityProbability, priorities),
+                Assignees = FindAssigneeByEmail(item.author, null, resources),
+                Theme = GetThemeFromSeverity(item.vulnerabilityProbability),
             };
-            list.Add(new RemoteSystemTaskModel() { UniqueId = item.Key, TaskCreate = taskCreate });
+            list.Add(new RemoteSystemTaskModel() { UniqueId = item.key, TaskCreate = taskCreate });
         }
 
         // Sync this with ProjectManager
@@ -336,10 +311,10 @@ public static class Program
         return [];
     }
 
-    private static int? GetPriorityId(Hotspot item, TaskPriorityDto[] priorities)
+    private static int? GetPriorityId(string priorityName, TaskPriorityDto[] priorities)
     {
         var priority = priorities.FirstOrDefault(p =>
-            string.Equals(p.Name, item.VulnerabilityProbability, StringComparison.CurrentCultureIgnoreCase));
+            string.Equals(p.Name, priorityName, StringComparison.CurrentCultureIgnoreCase));
         return priority?.Id;
     }
 
