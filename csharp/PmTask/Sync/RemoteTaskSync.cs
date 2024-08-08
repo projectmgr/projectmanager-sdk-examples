@@ -67,7 +67,7 @@ public class RemoteTaskSync
             var matchedTask = existingTasks.FirstOrDefault(existing => existing.Description.Replace("\\_", "_").Replace("&amp;", "&").Contains(item.UniqueId));
 
             // Does this task already exist?
-            if (matchedTask == null)
+            if (matchedTask == null || !matchedTask.Id.HasValue)
             {
                 Console.WriteLine($"Creating new task {item.TaskCreate.Name}");
                 tasksToCreate.Add(item.TaskCreate);
@@ -90,6 +90,19 @@ public class RemoteTaskSync
                     {
                         tasksToUpdate.Add(matchedTask.Id.Value,
                             new TaskUpdateDto() { Name = item.TaskCreate.Name, Description = item.TaskCreate.Description });
+                    }
+                }
+                
+                // Is this task assigned to the correct people?
+                if (!AssigneesMatch(matchedTask.Assignees.Select(a => a.Id!.Value).ToArray(), item.TaskCreate.Assignees))
+                {
+                    var newAssignees = item.TaskCreate.Assignees.Select(a => new AssigneeUpsertDto() { Id = a })
+                        .ToArray();
+                    var result = await client.TaskAssignee.ReplaceTaskAssignees(matchedTask.Id.Value, newAssignees);
+                    if (!result.Success)
+                    {
+                        Console.WriteLine(
+                            $"Error assigning task {matchedTask.ShortId} to user {item.TaskCreate.Assignees}: {result.Error.Message}");
                     }
                 }
 
@@ -177,5 +190,36 @@ public class RemoteTaskSync
             TasksDeleted = tasksToDelete.Count,
             TasksUpdated = tasksToUpdate.Count,
         };
+    }
+
+    private static bool AssigneesMatch(Guid[] listOne, Guid[] listTwo)
+    {
+        // Trivial case if lists are empty
+        if (listOne.Length == 0 && listTwo.Length == 0)
+        {
+            return true;
+        }
+
+        // If list length differs, they don't match
+        if (listOne.Length != listTwo.Length)
+        {
+            return false;
+        }
+
+        // Okay, there is a nonzero number of items in the list, let's make sure they match by sorting and checking
+        var sortedOne = new List<Guid>(listOne);
+        sortedOne.Sort();
+        var sortedTwo = new List<Guid>(listTwo);
+        sortedTwo.Sort();
+        for (int i = 0; i < listOne.Length; i++)
+        {
+            if (sortedOne[i] != sortedTwo[i])
+            {
+                return false;
+            }
+        }
+
+        // Lists match
+        return true;
     }
 }
