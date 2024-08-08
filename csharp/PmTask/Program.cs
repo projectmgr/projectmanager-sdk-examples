@@ -326,7 +326,6 @@ public static class Program
                 if (tasks != null)
                 {
                     tasks.Sort(new WbsSortHelper());
-                    OutputHelper.WriteItems(tasks, options.Format);
                     if (options.Format == null)
                     {
                         foreach (var task in tasks)
@@ -355,7 +354,6 @@ public static class Program
             if (tasks != null)
             {
                 tasks.Sort(new WbsSortHelper());
-                OutputHelper.WriteItems(tasks, options.Format);
                 if (options.Format == null)
                 {
                     foreach (var task in tasks)
