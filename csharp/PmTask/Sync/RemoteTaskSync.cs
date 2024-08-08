@@ -34,18 +34,6 @@ public class RemoteTaskSync
         return projects.Data.FirstOrDefault();
     }
 
-    private static async Task<TaskDto[]?> LoadTasks(ProjectManagerClient client, ProjectDto pmProject)
-    {
-        var result = await client.Task.QueryTasks(null, null, $"ProjectId eq {pmProject.Id}", null, null);
-        if (!result.Success)
-        {
-            Console.WriteLine($"Unable to retrieve tasks: {result.Error.Message}");
-            return null;
-        }
-
-        return result.Data;
-    }
-
     public static async Task<SyncResult> SyncRemoteTasks(List<RemoteSystemTaskModel> tasks, ProjectManagerClient client,
         string pmProjectId)
     {
@@ -58,17 +46,16 @@ public class RemoteTaskSync
         }
 
         // Retrieve all tasks within this project
-        var existingTasks = await LoadTasks(client, pmProject);
+        var existingTasks = await client.LoadTasks($"ProjectId eq {pmProject.Id}");
         if (existingTasks == null)
         {
             Console.WriteLine($"Unable to load tasks for ProjectManager project '{pmProjectId}'.");
             return new SyncResult() { Success = false };
         }
 
-        Console.WriteLine($"Found {existingTasks.Length} tasks in ProjectManager project '{pmProjectId}'.");
-
         // Our goal is to maintain a "sync" between the two systems.
         // By default, all tasks in PM are expected to be deleted UNLESS they also appear in the remote system.
+        Console.WriteLine($"Found {existingTasks.Count} tasks in ProjectManager project '{pmProjectId}'.");
         var tasksToCreate = new List<TaskCreateDto>();
         var tasksToDelete = new List<TaskDto>();
         var tasksToUpdate = new Dictionary<Guid, TaskUpdateDto>();

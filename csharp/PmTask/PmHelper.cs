@@ -81,16 +81,16 @@ public static class PmHelper
         var list = new List<ProjectDto>();
         while (true)
         {
-            var projects = await client.Project.QueryProjects(CHUNK_SIZE, list.Count, filter);
-            if (!projects.Success)
+            var result = await client.Project.QueryProjects(CHUNK_SIZE, list.Count, filter);
+            if (!result.Success)
             {
-                Console.WriteLine($"Error querying projects: {projects.Error.Message}");
+                Console.WriteLine($"Error querying projects: {result.Error.Message}");
                 return null;
             }
 
-            list.AddRange(projects.Data);
+            list.AddRange(result.Data);
 
-            if (projects.Data.Length < CHUNK_SIZE)
+            if (result.Data.Length < CHUNK_SIZE)
             {
                 return list;
             }
@@ -108,16 +108,43 @@ public static class PmHelper
         var list = new List<TaskDto>();
         while (true)
         {
-            var tasks = await client.Task.QueryTasks(CHUNK_SIZE, list.Count, filter);
-            if (!tasks.Success)
+            var result = await client.Task.QueryTasks(CHUNK_SIZE, list.Count, filter);
+            if (!result.Success)
             {
-                Console.WriteLine($"Error querying tasks: {tasks.Error.Message}");
+                Console.WriteLine($"Error querying tasks: {result.Error.Message}");
                 return null;
             }
 
-            list.AddRange(tasks.Data);
+            list.AddRange(result.Data);
             
-            if (tasks.Data.Length < CHUNK_SIZE)
+            if (result.Data.Length < CHUNK_SIZE)
+            {
+                return list;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Loads in a collection of tasks using pagination
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
+    public static async Task<List<ResourceDto>?> LoadResources(this ProjectManagerClient client, string? filter)
+    {
+        var list = new List<ResourceDto>();
+        while (true)
+        {
+            var result = await client.Resource.QueryResources(CHUNK_SIZE, list.Count, filter);
+            if (!result.Success)
+            {
+                Console.WriteLine($"Error querying resources: {result.Error.Message}");
+                return null;
+            }
+
+            list.AddRange(result.Data);
+            
+            if (result.Data.Length < CHUNK_SIZE)
             {
                 return list;
             }

@@ -150,6 +150,13 @@ public static class Program
         Matcher matcher = new();
         matcher.AddIncludePatterns(patterns);
 
+        // Retrieve resources so we can match assignees
+        var resources = await pmClient.LoadResources(null);
+        if (resources == null)
+        {
+            return;
+        }
+
         // Convert all these matches to tasks to sync
         var list = new List<RemoteSystemTaskModel>();
         foreach (var file in matcher.GetResultsInFullPath(options.Folder ?? "."))
@@ -158,7 +165,7 @@ public static class Program
             var fileInfo = new FileInfo(file);
 
             // Gather github most recent change on this file
-            var processStartInfo = new ProcessStartInfo("git", $"log --pretty=format:\"%an<%ae> %ad\" -n 1 \"{file}\"")
+            var processStartInfo = new ProcessStartInfo("git", $"log --pretty=format:\"%an%n%ae%n%ad\" -n 1 \"{file}\"")
             {
                 WorkingDirectory = options.Folder
             };
@@ -166,6 +173,8 @@ public static class Program
             var blame = gitInfo == null || gitInfo.StandardOutput.Length == 0
                 ? string.Empty
                 : $"* **Last Change**: {string.Join(Environment.NewLine, gitInfo.StandardOutput)}";
+            var name = gitInfo != null && gitInfo.StandardOutput.Length == 3 ? gitInfo.StandardOutput[0] : null;
+            var email = gitInfo != null && gitInfo.StandardOutput.Length == 3 ? gitInfo.StandardOutput[1] : null;
 
             // Construct a task for it
             var item = new TaskCreateDto()
@@ -175,6 +184,7 @@ public static class Program
                     $"* **Directory**: {fileInfo.Directory}\n" +
                     $"* **File**: {fileInfo.Name} ({fileInfo.Length} bytes)\n" +
                     $"* **Last Modified**: {fileInfo.LastWriteTimeUtc}\n{blame}\n\n{file}",
+                Assignees = FindAssigneeByEmail(email, name, resources),
             };
             list.Add(new RemoteSystemTaskModel()
             {
@@ -237,6 +247,20 @@ public static class Program
             }
         }
         
+        // Fetch priorities & resources
+        var resources = await pmClient.LoadResources(null);
+        if (resources == null)
+        {
+            return;
+        }
+        var priorityResult = await pmClient.Task.RetrieveTaskPriorities();
+        if (!priorityResult.Success)
+        {
+            Console.WriteLine($"Failed to fetch task priorities: {priorityResult.Error.Message}");
+            return;
+        }
+        var priorities = priorityResult.Data;
+        
         // Convert HotSpots into PM Tasks
         var list = new List<RemoteSystemTaskModel>();
         foreach (var item in hotspots)
@@ -249,8 +273,10 @@ public static class Program
                     $"- **Source**: {item.Component.Replace(item.Project + ":", "")} Line {item.Line}\n" +
                     $"- **Detected**: {item.CreationDate}\n" +
                     $"- **Blame**: {item.Author}\n" +
-                    $"- **Link**: https://sonarcloud.io/project/security_hotspots?id={item.Project}&hotspots={item.Key}\n" +
+                    $"- **Link**: [https://sonarcloud.io/project/security_hotspots?id={item.Project}&hotspots={item.Key}]\n" +
                     $"- **SonarCloud ID**: {item.Key}",
+                PriorityId = GetPriorityId(item, priorities),
+                Assignees = FindAssigneeByEmail(item.Author, null, resources),
                 // TODO: TaskCreate doesn't allow you to set color yet
                 // Color = GetColor(item.vulnerabilityProbability),
             };
@@ -269,6 +295,53 @@ public static class Program
         {
             Console.WriteLine("Failed.");
         }
+    }
+
+    private static Guid[] FindAssigneeByEmail(string? email, string? name, List<ResourceDto> resources)
+    {
+        // Prefer to find via email first
+        if (email != null)
+        {
+            var assignee = resources.FirstOrDefault(r => string.Equals(r.Email, email, StringComparison.CurrentCultureIgnoreCase));
+            if (assignee != null)
+            {
+                return [assignee.Id!.Value];
+            }
+        }
+        
+        // Find by name - has a few variants.  We'll try full name first, then last name, then first name.
+        // We will also only use matches if there's a single one.
+        if (name != null)
+        {
+            var assignee = resources.SingleOrDefault(r =>
+                string.Equals($"{r.FirstName} {r.LastName}", name, StringComparison.CurrentCultureIgnoreCase));
+            
+            if (assignee == null)
+            {
+                assignee = resources.SingleOrDefault(r =>
+                    string.Equals(r.LastName, name, StringComparison.CurrentCultureIgnoreCase));
+            }
+
+            if (assignee == null)
+            {
+                assignee = resources.SingleOrDefault(r =>
+                    string.Equals(r.FirstName, name, StringComparison.CurrentCultureIgnoreCase));
+            }
+            
+            if (assignee != null)
+            {
+                return [assignee.Id!.Value];
+            }
+        }
+
+        return [];
+    }
+
+    private static int? GetPriorityId(Hotspot item, TaskPriorityDto[] priorities)
+    {
+        var priority = priorities.FirstOrDefault(p =>
+            string.Equals(p.Name, item.VulnerabilityProbability, StringComparison.CurrentCultureIgnoreCase));
+        return priority?.Id;
     }
 
     private static string GetColor(string severity)
