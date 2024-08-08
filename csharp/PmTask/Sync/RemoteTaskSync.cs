@@ -141,8 +141,15 @@ public class RemoteTaskSync
                 {
                     if (task.Id.HasValue)
                     {
-                        Console.WriteLine($"Task {task.ShortId} is completed; removing.");
-                        await client.Task.DeleteTask(task.Id.Value);
+                        var result = await client.Task.DeleteTask(task.Id.Value);
+                        if (!result.Success)
+                        {
+                            Console.WriteLine($"Unable to remove task {task.ShortId}: {result.Error.Message}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Removed completed task {task.ShortId} ({task.Name}).");
+                        }
                     }
                 }
             }

@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using System.Web;
 using CommandLine;
@@ -26,14 +27,15 @@ public static class Program
     [Verb("git-blame-files", HelpText = "Import issues using a file pattern and git blame")]
     private class GitBlameFileOptions : BaseOptions
     {
-        [Option("pattern", HelpText = "The file pattern to scan. Multiple patterns are separated by commas.")]
-        public string? Pattern { get; set; }
+        [Option('p', "pattern", Required = true,
+            HelpText = "The file pattern to scan. Multiple patterns are separated by commas.")]
+        public string Pattern { get; set; } = default!;
 
-        [Option("folder", HelpText = "The folder to scan")]
+        [Option('f', "folder", HelpText = "The folder to scan (defaults to .)")]
         public string? Folder { get; set; }
 
-        [Option("pmproject", HelpText = "The ProjectManager project code")]
-        public string? PmProject { get; set; }
+        [Option("pmproject", Required = true, HelpText = "The ProjectManager project code")]
+        public string PmProject { get; set; } = default!;
     }
     
     [Verb("sonarcloud", HelpText = "Import issues from SonarCloud.io")]
@@ -135,15 +137,9 @@ public static class Program
     
     private static async Task GitBlameFiles(GitBlameFileOptions options)
     {
-        if (options.Pattern == null)
+        var pmClient = await MakeClient(options);
+        if (pmClient == null)
         {
-            Console.WriteLine("Please specify a file pattern using globbing options.");
-            return;
-        }
-
-        if (options.Folder == null)
-        {
-            Console.WriteLine("Please specify a folder to search for files of this type.");
             return;
         }
 
@@ -155,17 +151,21 @@ public static class Program
         matcher.AddIncludePatterns(patterns);
 
         // Convert all these matches to tasks to sync
-        List<RemoteSystemTaskModel> list = new();
-        foreach (var file in matcher.GetResultsInFullPath(options.Folder))
+        var list = new List<RemoteSystemTaskModel>();
+        foreach (var file in matcher.GetResultsInFullPath(options.Folder ?? "."))
         {
             // Gather stats on this file
             var fileInfo = new FileInfo(file);
 
             // Gather github most recent change on this file
-            var gitInfo = await RunProcessAsTask.ProcessEx.RunAsync("git", $"log -n 1 \"{file}\"");
-            var blame = gitInfo == null
+            var processStartInfo = new ProcessStartInfo("git", $"log --pretty=format:\"%an<%ae> %ad\" -n 1 \"{file}\"")
+            {
+                WorkingDirectory = options.Folder
+            };
+            var gitInfo = await RunProcessAsTask.ProcessEx.RunAsync(processStartInfo);
+            var blame = gitInfo == null || gitInfo.StandardOutput.Length == 0
                 ? string.Empty
-                : $"\nLast Change:\n\n{string.Join("\n", gitInfo.StandardOutput)}";
+                : $"* **Last Change**: {string.Join(Environment.NewLine, gitInfo.StandardOutput)}";
 
             // Construct a task for it
             var item = new TaskCreateDto()
@@ -174,7 +174,7 @@ public static class Program
                 Description =
                     $"* **Directory**: {fileInfo.Directory}\n" +
                     $"* **File**: {fileInfo.Name} ({fileInfo.Length} bytes)\n" +
-                    $"* **Last Modified**: {fileInfo.LastWriteTimeUtc}\n{blame}",
+                    $"* **Last Modified**: {fileInfo.LastWriteTimeUtc}\n{blame}\n\n{file}",
             };
             list.Add(new RemoteSystemTaskModel()
             {
@@ -184,18 +184,17 @@ public static class Program
         }
 
         // Sync with ProjectManager
-        // Console.WriteLine($"Syncing with ProjectManager Project '{options.PmProject}'...");
-        // var pmClient = MakeClient(options);
-        // var results = await RemoteTaskSync.SyncRemoteTasks(list, pmClient, options.PmProject ?? string.Empty);
-        // if (results.Success)
-        // {
-        //     Console.WriteLine("Success.");
-        //     Console.WriteLine($"{results.TasksCreated} task(s) created, {results.TasksUpdated} task(s) updated, and {results.TasksDeleted} task(s) deleted.");
-        // }
-        // else
-        // {
-        //     Console.WriteLine("Failed.");
-        // }
+        Console.WriteLine($"Syncing with ProjectManager Project '{options.PmProject}'...");
+        var results = await RemoteTaskSync.SyncRemoteTasks(list, pmClient, options.PmProject ?? string.Empty);
+        if (results.Success)
+        {
+            Console.WriteLine("Success.");
+            Console.WriteLine($"{results.TasksCreated} task(s) created, {results.TasksUpdated} task(s) updated, and {results.TasksDeleted} task(s) deleted.");
+        }
+        else
+        {
+            Console.WriteLine("Failed.");
+        }
     }
     
     private static async Task ImportSonarCloud(SonarCloudOptions options)
