@@ -2,6 +2,6 @@
 
 public class SonarIssueResponse
 {
-    public SonarPagination paging { get; set; }
-    public SonarIssue[] issues { get; set; }
+    public SonarPagination paging { get; set; } = new();
+    public SonarIssue[] issues { get; set; } = [];
 }

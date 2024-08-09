@@ -2,6 +2,6 @@
 
 public class SonarHotspotResponse
 {
-    public SonarPagination paging { get; set; }
-    public SonarHotspot[] hotspots { get; set; }
+    public SonarPagination paging { get; set; } = new();
+    public SonarHotspot[] hotspots { get; set; } = [];
 }

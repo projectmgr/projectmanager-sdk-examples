@@ -20,7 +20,7 @@ public static class Program
         public string? Env { get; set; }
     }
     
-    [Verb("git-blame-files", HelpText = "Import issues using a file pattern and git blame")]
+    [Verb("git-blame-files", HelpText = "Create tasks for files matching a pattern in a git repository")]
     private class GitBlameFileOptions : BaseOptions
     {
         [Option('p', "pattern", Required = true,
@@ -34,7 +34,7 @@ public static class Program
         public string PmProject { get; set; } = default!;
     }
     
-    [Verb("sonarcloud", HelpText = "Import issues from SonarCloud.io")]
+    [Verb("sonar-hotspots", HelpText = "Create tasks for hotspots from SonarCloud.io")]
     private class SonarCloudOptions : BaseOptions
     {
         [Option('s', "sonar_token", HelpText = "SonarCloud API token")]
@@ -47,7 +47,7 @@ public static class Program
         public string PmProject { get; set; } = default!;
     }
     
-    [Verb("create-task", HelpText = "Create one or more tasks")]
+    [Verb("create-task", HelpText = "Create a single task within a project")]
     private class CreateTaskOptions : BaseOptions
     {
         [Option("project", Required = true, HelpText = "The name, ID, or ShortID of the project in which to create the task")]
@@ -74,7 +74,7 @@ public static class Program
         public string? Query { get; set; }
     }
     
-    [Verb("query-tasks", HelpText = "Query for tasks")]
+    [Verb("query-tasks", HelpText = "Query for tasks within your Workspace")]
     private class QueryTasksOptions : BaseOptions
     {
         [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]
@@ -84,7 +84,7 @@ public static class Program
         public string Query { get; set; } = default!;
     }
     
-    [Verb("list-projects", HelpText = "List projects")]
+    [Verb("list-projects", HelpText = "List projects within your Workspace")]
     private class ListProjectsOptions : BaseOptions
     {
         [Option('f', "format", HelpText = "If specified, outputs in the format JSON, CSV, or TSV (with tabs instead of commas).")]

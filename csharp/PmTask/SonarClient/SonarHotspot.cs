@@ -2,18 +2,18 @@
 
 public class SonarHotspot
 {
-    public string key { get; set; }
-    public string component { get; set; }
-    public string project { get; set; }
-    public string securityCategory { get; set; }
-    public string vulnerabilityProbability { get; set; }
-    public string status { get; set; }
-    public int line { get; set; }
-    public string message { get; set; }
-    public string author { get; set; }
-    public string creationDate { get; set; }
-    public string updateDate { get; set; }
-    public string ruleKey { get; set; }
+    public string key { get; set; } = default!;
+    public string component { get; set; } = default!;
+    public string project { get; set; } = default!;
+    public string securityCategory { get; set; } = default!;
+    public string vulnerabilityProbability { get; set; } = default!;
+    public string status { get; set; } = default!;
+    public int line { get; set; } = 0;
+    public string message { get; set; } = default!;
+    public string author { get; set; } = default!;
+    public string creationDate { get; set; } = default!;
+    public string updateDate { get; set; } = default!;
+    public string ruleKey { get; set; } = default!;
     // textRange: startLine, endLine, startOffset, endOffset
     // flows: (?) an array
 }
