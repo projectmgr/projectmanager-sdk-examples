@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 using System.Web;
 using CommandLine;
 using Microsoft.Extensions.FileSystemGlobbing;
@@ -91,6 +92,25 @@ public static class Program
         public OutputFormat? Format { get; set; }
     }
     
+    [Verb("log-time", HelpText = "Log a timesheet entry for a Resource on a specific Task")]
+    private class LogTimeOptions : BaseOptions
+    {
+        [Option('r', "resource", Required = true, HelpText = "The ID or email address of the Resource who is recording time")]
+        public string ResourceId { get; set; } = default!;
+
+        [Option('t', "task", Required = true, HelpText = "The ID or short code of the Task where the time was spent")]
+        public string TaskId { get; set; } = default!;
+
+        [Option('d', "day", HelpText = "The day on which the time was spent (Default: Today)")]
+        public string? Day { get; set; } = default!;
+
+        [Option('h', "hours", Required = true, HelpText = "The number of hours spent on this Task by this Resource on this Day")]
+        public decimal Hours { get; set; } = default!;
+
+        [Option('n', "notes", HelpText = "Comments on this timesheet")]
+        public string? Notes { get; set; } 
+    }
+    
     [Verb("read-comments", HelpText = "Read all discussion comments about a task")]
     private class ReadCommentsOptions : BaseOptions
     {
@@ -129,8 +149,52 @@ public static class Program
         await parsed.WithParsedAsync<CreateTaskOptions>(CreateTask);
         await parsed.WithParsedAsync<SonarCloudOptions>(ImportSonarCloud);
         await parsed.WithParsedAsync<GitBlameFileOptions>(GitBlameFiles);
+        await parsed.WithParsedAsync<LogTimeOptions>(LogTime);
     }
-    
+
+    private static async Task LogTime(LogTimeOptions options)
+    {
+        var pmClient = await MakeClient(options);
+        if (pmClient == null)
+        {
+            return;
+        }
+
+        // Identify the task and resource
+        var task = await pmClient.FindOneTask($"(ShortId eq '{options.TaskId}')");
+        if (task == null)
+        {
+            Console.WriteLine($"Unable to locate task '{options.TaskId}'");
+            return;
+        }
+        var resource = await pmClient.FindOneResource($"(email eq '{options.ResourceId}')");
+        if (resource == null)
+        {
+            Console.WriteLine($"Unable to locate resource '{options.ResourceId}'");
+            return;
+        }
+        
+        // Okay, let's create this timesheet entry
+        var request = new TimesheetCreateRequestDto()
+        {
+            TaskId = task.Id,
+            ResourceId = resource.Id,
+            Date = options.Day ?? DateTime.Now.ToString("yyyy-MM-dd"),
+            Hours = options.Hours,
+            Notes = options.Notes,
+        };
+        var result = await pmClient.Timesheet.CreateTimeEntry(request);
+        if (result.Success)
+        {
+            Console.WriteLine(
+                $"Created timesheet entry for {resource.Email} on {request.Date} for {options.Hours} hours spent on {task.Name}.");
+        }
+        else
+        {
+            Console.WriteLine($"Error: Unable to create timesheet entry - {result.Error.Message}");
+        }
+    }
+
     private static async Task GitBlameFiles(GitBlameFileOptions options)
     {
         var pmClient = await MakeClient(options);

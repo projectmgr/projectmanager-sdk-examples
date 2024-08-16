@@ -8,6 +8,36 @@ public static class PmHelper
     private const int CHUNK_SIZE = 1000;
 
     /// <summary>
+    /// Find a single resource matching a specific filter
+    /// </summary>
+    public static async Task<ResourceDto?> FindOneResource(this ProjectManagerClient client, string? filter)
+    {
+        var items = await LoadResources(client, filter);
+        if (items == null)
+        {
+            return null;
+        }
+        if (items.Count == 0)
+        {
+            Console.WriteLine("Found no matching resources.");
+            return null;
+        }
+        if (items.Count > 1)
+        {
+            Console.WriteLine("Found multiple matches:");
+            foreach (var item in items)
+            {
+                Console.WriteLine($"* {item.Email} - {item.FirstName} {item.LastName} ({item.Id})");
+            }
+
+            return null;
+        }
+        
+        // Okay we got just one match
+        return items[0];
+    }
+    
+    /// <summary>
     /// Find a single task matching a specific filter
     /// </summary>
     public static async Task<TaskDto?> FindOneTask(this ProjectManagerClient client, string? filter)
