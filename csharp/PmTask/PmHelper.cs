@@ -5,54 +5,179 @@ namespace PmTask;
 
 public static class PmHelper
 {
-    public static async Task<TaskDto?> FindTask(this ProjectManagerClient client, string? taskId)
-    {
-        var tasks = await client.Task.QueryTasks(filter: $"ShortId eq '{taskId}'");
-        if (tasks == null || !tasks.Success)
-        {
-            Console.WriteLine($"API call failed: {tasks?.Error.Message}.");
-            return null;
-        }
-        if (tasks.Data.Length != 1) {
-            Console.WriteLine($"No task found with ID {taskId}.");
-            return null;
-        }
-        return tasks.Data.FirstOrDefault();
-    }
-    
-    public static async Task<ProjectDto?> FindProject(this ProjectManagerClient projectsClient, string? projectId)
-    {
-        var projects = (await projectsClient.Project.QueryProjects());
-        if (projects == null || !projects.Success)
-        {
-            Console.WriteLine($"API call failed: {projects?.Error.Message}.");
-            return null;
-        }
-        if (projects.Data == null || projects.Data.Length == 0)
-        {
-            Console.WriteLine("No projects found within this account.");
-            return null;
-        }
+    private const int CHUNK_SIZE = 1000;
 
-        // Fetch all projects and find the one that matches locally so we can give debugging information
-        var project = projects.Data.FirstOrDefault(project =>
-            project.ShortId == projectId
-            || string.Equals(project.Name, projectId, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(project.Id.ToString(), projectId, StringComparison.OrdinalIgnoreCase));
-        if (project != null)
+    /// <summary>
+    /// Find a single resource matching a specific filter
+    /// </summary>
+    public static async Task<ResourceDto?> FindOneResource(this ProjectManagerClient client, string? filter)
+    {
+        var items = await LoadResources(client, filter);
+        if (items == null)
         {
-            return project;
+            return null;
+        }
+        if (items.Count == 0)
+        {
+            Console.WriteLine("Found no matching resources.");
+            return null;
+        }
+        if (items.Count > 1)
+        {
+            Console.WriteLine("Found multiple matches:");
+            foreach (var item in items)
+            {
+                Console.WriteLine($"* {item.Email} - {item.FirstName} {item.LastName} ({item.Id})");
+            }
+
+            return null;
         }
         
-        // Provide some helpful information
-        Console.WriteLine(
-            $"Found {projects.Data.Count()} project(s), but none with ID, shortID, or name '{projectId}'.");
-        foreach (var item in projects.Data)
+        // Okay we got just one match
+        return items[0];
+    }
+    
+    /// <summary>
+    /// Find a single task matching a specific filter
+    /// </summary>
+    public static async Task<TaskDto?> FindOneTask(this ProjectManagerClient client, string? filter)
+    {
+        var tasks = await LoadTasks(client, filter);
+        if (tasks == null)
         {
-            Console.WriteLine($"    {item.ShortId} - {item.Name} ({item.Id})");
+            return null;
         }
-        return null;
+        if (tasks.Count == 0)
+        {
+            Console.WriteLine("Found no matching tasks.");
+            return null;
+        }
+        if (tasks.Count > 1)
+        {
+            Console.WriteLine("Found multiple matches:");
+            foreach (var item in tasks)
+            {
+                Console.WriteLine($"* {item.ShortId} - {item.Name}");
+            }
+
+            return null;
+        }
+        
+        // Okay we got just one project
+        return tasks[0];
+    }
+    
+    /// <summary>
+    /// Find a single project matching a specific filter
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
+    public static async Task<ProjectDto?> FindOneProject(this ProjectManagerClient client, string? filter)
+    {
+        var projects = await LoadProjects(client, filter);
+        if (projects == null)
+        {
+            return null;
+        }
+        if (projects.Count == 0)
+        {
+            Console.WriteLine("Found no matching projects.");
+            return null;
+        }
+        if (projects.Count > 1)
+        {
+            Console.WriteLine("Found multiple matches:");
+            foreach (var item in projects)
+            {
+                Console.WriteLine($"* {item.ShortId} - {item.ShortCode} - {item.Name}");
+            }
+
+            return null;
+        }
+        
+        // Okay we got just one project
+        return projects[0];
     }
 
+    /// <summary>
+    /// Loads in a collection of projects using pagination
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
+    public static async Task<List<ProjectDto>?> LoadProjects(this ProjectManagerClient client, string? filter)
+    {
+        var list = new List<ProjectDto>();
+        while (true)
+        {
+            var result = await client.Project.QueryProjects(CHUNK_SIZE, list.Count, filter);
+            if (!result.Success)
+            {
+                Console.WriteLine($"Error querying projects: {result.Error.Message}");
+                return null;
+            }
 
+            list.AddRange(result.Data);
+
+            if (result.Data.Length < CHUNK_SIZE)
+            {
+                return list;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Loads in a collection of tasks using pagination
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
+    public static async Task<List<TaskDto>?> LoadTasks(this ProjectManagerClient client, string? filter)
+    {
+        var list = new List<TaskDto>();
+        while (true)
+        {
+            var result = await client.Task.QueryTasks(CHUNK_SIZE, list.Count, filter);
+            if (!result.Success)
+            {
+                Console.WriteLine($"Error querying tasks: {result.Error.Message}");
+                return null;
+            }
+
+            list.AddRange(result.Data);
+            
+            if (result.Data.Length < CHUNK_SIZE)
+            {
+                return list;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Loads in a collection of tasks using pagination
+    /// </summary>
+    /// <param name="client"></param>
+    /// <param name="filter"></param>
+    /// <returns></returns>
+    public static async Task<List<ResourceDto>?> LoadResources(this ProjectManagerClient client, string? filter)
+    {
+        var list = new List<ResourceDto>();
+        while (true)
+        {
+            var result = await client.Resource.QueryResources(CHUNK_SIZE, list.Count, filter);
+            if (!result.Success)
+            {
+                Console.WriteLine($"Error querying resources: {result.Error.Message}");
+                return null;
+            }
+
+            list.AddRange(result.Data);
+            
+            if (result.Data.Length < CHUNK_SIZE)
+            {
+                return list;
+            }
+        }
+    }
 }
