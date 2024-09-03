@@ -12,8 +12,8 @@
       <PackageReference Include="CommandLineParser" Version="2.9.1" />
       <PackageReference Include="CSVFile" Version="3.2.0" />
       <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="8.0.0" />
-      <PackageReference Include="ProjectManager.SDK" Version="115.0.4328" />
-      <PackageReference Include="RestSharp" Version="111.4.1" />
+      <PackageReference Include="ProjectManager.SDK" Version="115.0.4330" />
+      <PackageReference Include="RestSharp" Version="112.0.0" />
       <PackageReference Include="RunProcessAsTask" Version="1.2.4" />
     </ItemGroup>
 
