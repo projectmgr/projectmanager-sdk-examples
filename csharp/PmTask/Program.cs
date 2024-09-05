@@ -583,6 +583,7 @@ public static class Program
         {
             client = ProjectManagerClient
                 .WithCustomEnvironment(new Uri(environmentString))
+                .WithMachineName(Environment.MachineName)
                 .WithBearerToken(apiKey)
                 .WithAppName("PmTask");
         }
@@ -590,6 +591,7 @@ public static class Program
         {
             client = ProjectManagerClient
                 .WithEnvironment("production")
+                .WithMachineName(Environment.MachineName)
                 .WithBearerToken(apiKey)
                 .WithAppName("PmTask");
         }
