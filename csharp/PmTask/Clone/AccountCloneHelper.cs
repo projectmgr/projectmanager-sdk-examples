@@ -134,11 +134,11 @@ public class AccountCloneHelper
             {
                 var teams = r.Teams
                     .Select(t => t.Id!.Value)
-                    .Select(t => map.MapKeyGuid("ResourceTeam", t))
+                    .Select(t => map.MapKeyGuid("ResourceTeam", t)!.Value)
                     .ToArray();
                 var skills = r.Skills
                     .Select(t => t.Id!.Value)
-                    .Select(t => map.MapKeyGuid("ResourceSkill", t))
+                    .Select(t => map.MapKeyGuid("ResourceSkill", t)!.Value)
                     .ToArray();
                 var result = await dest.Resource.CreateResource(new ResourceCreateDto()
                 {
