@@ -18,12 +18,51 @@ public class AccountCloneHelper
         await CloneResourceTeams(src, dest, map);
         await CloneTags(src, dest, map);
         await CloneResources(src, dest, map);
-        
-        // Manager
-        // what are these?
-        // Project
-        var projects = await src.Project.QueryProjects();
-        Console.WriteLine($"Cloning {projects.Data.Length} projects");
+        await CloneProjects(src, dest, map);
+        await CloneTimesheets(src, dest, map);
+    }
+
+    private static async Task CloneTimesheets(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Task Field Value
+        //var taskFieldValues = await src.TaskField.RetrieveAllTaskFieldValues(taskId);
+        // Timesheet
+        var timesheets = await src.Timesheet.QueryTimeSheets();
+        Console.WriteLine($"Cloning {timesheets.Data.Length} timesheets");
+    }
+
+    private static async Task CloneProjects(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        var srcProjects = await src.Project.QueryProjects().ThrowOnError("Fetching from source");
+        var destProjects = await dest.Project.QueryProjects().ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcProjects.Data.Length} projects... ");
+
+        var results = await SyncHelper.SyncData("Project", srcProjects.Data, destProjects.Data, map,
+            p => p.Name,
+            p => p.Id!.Value.ToString(),
+            (p1, p2) =>
+            {
+                return p1.Name == p2.Name
+                       && p1.HourlyRate == p2.HourlyRate
+                       && p1.Budget == p2.Budget
+                       && p1.Description == p2.Description
+                       && p1.StatusUpdate == p2.StatusUpdate;
+            },
+            async p =>
+            {
+                var result = await dest.Project.CreateProject(new ProjectCreateDto()
+                {
+                    Name = p.Name,
+                    Description = p.Description,
+                    HourlyRate = p.HourlyRate,
+                    Budget = p.Budget,
+                    StatusUpdate = p.StatusUpdate,
+                }).ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            null,
+            null);
+        Console.WriteLine(results);
         
         // Project Members
         //var projectId = Guid.Empty;
@@ -47,12 +86,6 @@ public class AccountCloneHelper
         // Task Field
         var taskFields = await src.TaskField.QueryTaskFields();
         Console.WriteLine($"Cloning {taskFields.Data.Length} taskFields");
-
-        // Task Field Value
-        //var taskFieldValues = await src.TaskField.RetrieveAllTaskFieldValues(taskId);
-        // Timesheet
-        var timesheets = await src.Timesheet.QueryTimeSheets();
-        Console.WriteLine($"Cloning {timesheets.Data.Length} timesheets");
     }
 
     private static async Task CloneResources(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
