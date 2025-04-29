@@ -11,6 +11,11 @@ public class AccountCloneHelper
     {
         var map = new AccountMap();
         await CloneCustomers(src, dest, map);
+        await CloneProjectPriorities(src, dest, map);
+        await CloneProjectChargeCodes(src, dest, map);
+        await CloneProjectFolders(src, dest, map);
+        await CloneProjectStatuses(src, dest, map);
+        await CloneProjectFields(src, dest, map);
         
         // Manager
         // what are these?
@@ -18,30 +23,10 @@ public class AccountCloneHelper
         var projects = await src.Project.QueryProjects();
         Console.WriteLine($"Cloning {projects.Data.Length} projects");
         
-        // Project Priority
-        var projectPriorities = await src.ProjectPriority.RetrieveProjectPriorities();
-        Console.WriteLine($"Cloning {projectPriorities.Data.Length} projectPriorities");
-        
-        // Project Charge Code
-        var projectChargeCodes = await src.ProjectChargeCode.RetrieveChargeCodes();
-        Console.WriteLine($"Cloning {projectChargeCodes.Data.Length} projectChargeCodes");
-        
-        // Project Folder
-        var projectFolders = await src.ProjectFolder.RetrieveProjectFolders();
-        Console.WriteLine($"Cloning {projectFolders.Data.Length} projectFolders");
-        
         // Project Members
         //var projectId = Guid.Empty;
         //var projectMembers = await src.ProjectMembers.RetrieveProjectMembers(projectId, false);
         
-        // Project Status
-        var projectStatuses = await src.ProjectStatus.RetrieveProjectStatuses();
-        Console.WriteLine($"Cloning {projectStatuses.Data.Length} projectStatuses");
-
-        // Project Field
-        var projectFields = await src.ProjectField.RetrieveProjectFields();
-        Console.WriteLine($"Cloning {projectFields.Data.Length} projectFields");
-
         // Project Field Value
         //var projectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(projectId);
         
@@ -86,39 +71,118 @@ public class AccountCloneHelper
         Console.WriteLine($"Cloning {timesheets.Data.Length} timesheets");
     }
 
+    private static async Task CloneProjectFields(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Project Field
+        var srcProjectFields = await src.ProjectField.RetrieveProjectFields().ThrowOnError("Fetching from source");
+        var destProjectFields =
+            await dest.ProjectField.RetrieveProjectFields().ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcProjectFields.Data.Length} projectFields... ");
+
+        var results = await SyncHelper.SyncData(srcProjectFields.Data, destProjectFields.Data, map,
+            pf => pf.Name,
+            pf => pf.Id!.Value.ToString(),
+            async pf =>
+            {
+                var result = await dest.ProjectField.CreateProjectField(new ProjectFieldCreateDto()
+                        { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
+                    .ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            }, 
+            (srcPf, destPf) =>
+            {
+                return srcPf.Name == destPf.Name
+                       && srcPf.Options == destPf.Options
+                       && srcPf.Type == destPf.Type
+                       && srcPf.ShortId == destPf.ShortId;
+            }, 
+            null, // no updates available for project fields 
+            async pf =>
+            {
+                await dest.ProjectField.DeleteProjectField(pf.Id!.Value.ToString()).ThrowOnError("Deleting");
+            });
+        Console.WriteLine(results.ToString());
+    }
+
+    private static async Task CloneProjectStatuses(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Project statuses are not currently create-able from the API
+        
+        // Project Status
+        // var srcProjectStatuses = await src.ProjectStatus.RetrieveProjectStatuses().ThrowOnError("Fetching from source");
+        // var destProjectStatuses =
+        //     await dest.ProjectStatus.RetrieveProjectStatuses().ThrowOnError("Fetching from destination");
+        // Console.WriteLine($"Cloning {srcProjectStatuses.Data.Length} projectStatuses");
+    }
+
+    private static async Task CloneProjectFolders(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Project folders are not currently create-able from the API
+        
+        // Project Folder
+        // var srcProjectFolders = await src.ProjectFolder.RetrieveProjectFolders().ThrowOnError("Fetching from source");
+        // var destProjectFolders =
+        //     await dest.ProjectFolder.RetrieveProjectFolders().ThrowOnError("Fetching from destination");
+        // Console.WriteLine($"Cloning {projectFolders.Data.Length} projectFolders");
+    }
+
+    private static async Task CloneProjectChargeCodes(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Project Charge Codes are not currently create-able from the API
+
+        // Project Charge Code
+        // var srcProjectChargeCodes = await src.ProjectChargeCode.RetrieveChargeCodes().ThrowOnError("Fetching from source");
+        // var destProjectChargeCodes =
+        //     await dest.ProjectChargeCode.RetrieveChargeCodes().ThrowOnError("Fetching from destination");
+        // Console.Write($"Cloning {srcProjectChargeCodes.Data.Length} projectChargeCodes... ");
+    }
+
+    private static async Task CloneProjectPriorities(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Project Priorities are not currently create-able from the API
+        
+        
+        // var srcProjectPriorities = await src.ProjectPriority.RetrieveProjectPriorities()
+        //     .ThrowOnError("Fetching from source");
+        // Console.Write($"Cloning {srcProjectPriorities.Data.Length} projectPriorities... ");
+        // var destProjectPriorities =
+        //     await dest.ProjectPriority.RetrieveProjectPriorities().ThrowOnError("Fetching from destination");
+        //
+        // // Execute the sync
+        // var results = await SyncHelper.SyncData(srcProjectPriorities.Data, destProjectPriorities.Data, map, 
+        //     p => p.Name,
+        //     p => p.Id?.ToString() ?? string.Empty,
+    }
+
     private static async Task CloneCustomers(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        // Source
         var srcCustomers = await src.ProjectCustomer.RetrieveProjectCustomers()
-            .ThrowOnError("Fetching customers from source");
+            .ThrowOnError("Fetching from source");
         Console.Write($"Cloning {srcCustomers.Data.Length} customers... ");
-
-        // Dest
         var destCustomers = await dest.ProjectCustomer.RetrieveProjectCustomers()
-            .ThrowOnError("Fetching customers from destination");
+            .ThrowOnError("Fetching from destination");
 
         // Execute the sync
         var results = await SyncHelper.SyncData<ProjectCustomerDto>(srcCustomers.Data, destCustomers.Data, map,
             c => c.Name,
-            c => c.Id?.ToString() ?? string.Empty,
+            c => c.Id!.Value.ToString(),
             async c =>
             {
-                c.Id = Guid.Empty;
                 var created = await dest.ProjectCustomer.CreateProjectCustomer(new ProjectCustomerCreateDto()
                 {
                     Name = c.Name
-                }).ThrowOnError("Creating Project Customer");
+                }).ThrowOnError("Creating");
                 return created.Data.Id!.Value.ToString();
             },
             (cSrc, cDest) => cSrc.Name == cDest.Name, async (cSrc, cDest) =>
             {
                 await dest.ProjectCustomer.UpdateProjectCustomer(cDest.Id!.Value, new ProjectCustomerCreateDto() { Name = cSrc.Name })
-                    .ThrowOnError("Updating Project Customer");
+                    .ThrowOnError("Updating");
             },
             async (c) =>
             {
                 await dest.ProjectCustomer.DeleteProjectCustomer(c.Id!.Value)
-                    .ThrowOnError("Deleting Project Customer");
+                    .ThrowOnError("Deleting");
             });
         Console.WriteLine(results.ToString());
     }
