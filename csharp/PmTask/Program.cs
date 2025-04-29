@@ -5,6 +5,7 @@ using System.Web;
 using CommandLine;
 using Microsoft.Extensions.FileSystemGlobbing;
 using PmTask;
+using PmTask.Clone;
 using PmTask.SonarClient;
 using PmTask.Sync;
 using ProjectManager.SDK;
@@ -130,6 +131,13 @@ public static class Program
         [Option("message", HelpText = "The text, in markdown format, to add to the discussion")]
         public string? Message { get; set; }
     }
+
+    [Verb("clone-account", HelpText = "Clone one account into another")]
+    private class CloneAccountOptions : BaseOptions
+    {
+        [Option("newkey", Required = true, HelpText = "The API key of the new account that will receive the cloned data")]
+        public string? NewAccountApiKey { get; set; }
+    }
     
     private	static Type[] LoadVerbs()
     {
@@ -150,6 +158,47 @@ public static class Program
         await parsed.WithParsedAsync<SonarCloudOptions>(ImportSonarCloud);
         await parsed.WithParsedAsync<GitBlameFileOptions>(GitBlameFiles);
         await parsed.WithParsedAsync<LogTimeOptions>(LogTime);
+        await parsed.WithParsedAsync<CloneAccountOptions>(CloneAccount);
+    }
+
+    private static async Task CloneAccount(CloneAccountOptions options)
+    {
+        var src = await MakeClient(options);
+        if (src == null)
+        {
+            return;
+        }
+
+        // Check privileges for source account
+        var srcMe = await src.Me.RetrieveMe();
+        if (srcMe.Data.Permissions.EditAllProjects != true)
+        {
+            Console.WriteLine(
+                $"The user {srcMe.Data.EmailAddress} within workspace {srcMe.Data.WorkSpaceName} does not have EditAllProjects permission.");
+            Console.WriteLine("This permission is required to ensure all projects can be cloned properly.");
+            Console.WriteLine("Please try again using an API key that has EditAllProjects permission.");
+            return;
+        }
+        Console.WriteLine($"Copying from account {srcMe.Data.WorkSpaceName} as {srcMe.Data.EmailAddress}.");
+        
+        // Check privileges for destination account
+        var dest = ProjectManagerClient
+            .WithEnvironment("production")
+            .WithMachineName(Environment.MachineName)
+            .WithBearerToken(options.NewAccountApiKey)
+            .WithAppName("PmTask");
+        var destMe = await dest.Me.RetrieveMe();
+        if (destMe.Data.Permissions.EditAllProjects != true)
+        {
+            Console.WriteLine(
+                $"The user {destMe.Data.EmailAddress} within workspace {destMe.Data.WorkSpaceName} does not have EditAllProjects permission.");
+            Console.WriteLine("This permission is required to ensure all projects can be cloned properly.");
+            Console.WriteLine("Please try again using an API key that has EditAllProjects permission.");
+            return;
+        }
+        
+        // This does all the work
+        await AccountCloneHelper.CloneAccount(src, dest);
     }
 
     private static async Task LogTime(LogTimeOptions options)
@@ -582,7 +631,7 @@ public static class Program
         if (environmentString != null)
         {
             client = ProjectManagerClient
-                .WithCustomEnvironment(new Uri(environmentString))
+                .WithCustomEnvironment(new Uri(environmentString), null)
                 .WithMachineName(Environment.MachineName)
                 .WithBearerToken(apiKey)
                 .WithAppName("PmTask");
