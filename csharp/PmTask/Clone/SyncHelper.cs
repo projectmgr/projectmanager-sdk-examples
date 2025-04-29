@@ -53,9 +53,15 @@ public class SyncHelper
         Func<T, Task>? deleteFunc)
     {
         var results = new SyncResults();
-        
+
+        // This map is not guaranteed to be unique, so it cannot be assembled with ToDictionary
+        var destMap = new Dictionary<string, T>();
+        foreach (var d in dest)
+        {
+            destMap[identityFunc(d)] = d;
+        }
+
         // Convert our destination list to a dictionary for fast lookup
-        var destMap = dest.ToDictionary(d => identityFunc(d));
         var keysToDelete = dest.Select(d => primaryKeyFunc(d)).ToList();
         foreach (var item in src)
         { 

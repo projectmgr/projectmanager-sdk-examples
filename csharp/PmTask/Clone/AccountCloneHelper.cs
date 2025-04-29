@@ -107,9 +107,20 @@ public class AccountCloneHelper
         Console.Write($"Cloning {srcResources.Data.Length} resources... ");
         
         // Special handling for resources: We aren't creating them with email addresses, because that would create
-        // users and link them to the test account.
+        // users and link them to the test account.  Because of this, we eliminate first and last names, and only sync
+        // on email addresses.  But when migrating data, all email addresses are moved to last names.
+        foreach (var item in srcResources.Data)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Email))
+            {
+                item.FirstName = "Cloned";
+                item.LastName = item.Email.Replace('@','_');
+                item.Email = null;
+            }
+        }
+        var filteredDestResources = destResources.Data.Where(r => String.IsNullOrWhiteSpace(r.Email)).ToArray();
 
-        var results = await SyncHelper.SyncData("Resource", srcResources.Data, destResources.Data, map,
+        var results = await SyncHelper.SyncData("Resource", srcResources.Data, filteredDestResources, map,
             r => $"{r.FirstName} {r.LastName}",
             r => r.Id!.Value.ToString(),
             (r1, r2) =>
@@ -159,8 +170,28 @@ public class AccountCloneHelper
                 }).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            null,
-            null
+            async (srcResource, destResource) =>
+            {
+                await dest.Resource.UpdateResource(destResource.Id!.Value, new ResourceUpdateDto()
+                {
+                    Notes = srcResource.Notes,
+                    HourlyRate = srcResource.HourlyRate,
+                    City = srcResource.City,
+                    State = srcResource.State,
+                    CountryCode = srcResource.Country,
+                    ColorName = srcResource.ColorName,
+                    FirstName = srcResource.FirstName,
+                    LastName = srcResource.LastName,
+                    Phone = srcResource.Phone,
+                }).ThrowOnError("Updating");
+            },
+            async r =>
+            {
+                await dest.Resource.UpdateResource(r.Id!.Value, new ResourceUpdateDto()
+                {
+                    IsActive = false
+                }).ThrowOnError("Deactivating");
+            }
         );
         Console.WriteLine(results);
     }
