@@ -180,4 +180,22 @@ public static class PmHelper
             }
         }
     }
+
+    public static async Task<AstroResult<T>> ThrowOnError<T>(this Task<AstroResult<T>> task, string? actionName)
+    {
+        var result = await task;
+        if (!result.Success)
+        {
+            if (actionName == null)
+            {
+                throw new Exception($"{actionName}: {result.Error.Message}");
+            }
+            else
+            {
+                throw new Exception($"Failure in AstroResult<{nameof(T)}>: {result.Error.Message}");
+            }
+        }
+
+        return result;
+    }
 }
