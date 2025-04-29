@@ -11,4 +11,15 @@ public class AccountMap
     }
 
     public List<AccountMapItem> Items { get; set; } = new();
+
+    public string MapKey(string category, string key)
+    {
+        var match = Items.FirstOrDefault(i => i.Category == category && i.OriginalPrimaryKey == key);
+        if (match != null)
+        {
+            return match.NewPrimaryKey;
+        }
+
+        throw new Exception($"No match found for {category} key {key}");
+    }
 }

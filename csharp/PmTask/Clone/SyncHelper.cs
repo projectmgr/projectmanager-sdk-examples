@@ -39,19 +39,22 @@ public class SyncHelper
     /// <summary>
     /// Execute a sync action on a specific data type 
     /// </summary>
-    public static async Task<SyncResults> SyncData<T>(T[] src, T[] dest, AccountMap map, 
+    public static async Task<SyncResults> SyncData<T>(
+        string category,
+        T[] src, 
+        T[] dest, 
+        AccountMap map, 
         Func<T, string> identityFunc, 
         Func<T, string> primaryKeyFunc,
-        Func<T, Task<string>> createFunc, 
         Func<T, T, bool> compareFunc,
+        Func<T, Task<string>> createFunc, 
         Func<T, T, Task>? updateFunc, 
-        Func<T, Task> deleteFunc)
+        Func<T, Task>? deleteFunc)
     {
         var results = new SyncResults();
         
         // Convert our destination list to a dictionary for fast lookup
         var destMap = dest.ToDictionary(d => identityFunc(d));
-        var destKeyMap = dest.ToDictionary(d => primaryKeyFunc(d));
         var keysToDelete = dest.Select(d => primaryKeyFunc(d)).ToList();
         foreach (var item in src)
         { 
@@ -83,7 +86,7 @@ public class SyncHelper
                 }
                 map.Items.Add(new AccountMap.AccountMapItem()
                 {
-                    Category = nameof(T),
+                    Category = category,
                     Identity = identityString,
                     OriginalPrimaryKey = primaryKeyString,
                     NewPrimaryKey = newPrimaryKey,
@@ -95,7 +98,7 @@ public class SyncHelper
                 results.Creates++;
                 map.Items.Add(new AccountMap.AccountMapItem()
                 {
-                    Category = nameof(T), 
+                    Category = category, 
                     Identity = identityString, 
                     OriginalPrimaryKey = primaryKeyString,
                     NewPrimaryKey = newPrimaryKey,
@@ -103,12 +106,16 @@ public class SyncHelper
             }
         }
         
-        // Delete other items that shouldn't continue to exist
-        foreach (var key in keysToDelete)
+        // If we have the ability to delete, remove items by their primary key on conflicts
+        if (deleteFunc != null)
         {
-            var itemToDelete = destKeyMap[key];
-            await deleteFunc(itemToDelete);
-            results.Deletes++;
+            var destKeyMap = dest.ToDictionary(d => primaryKeyFunc(d));
+            foreach (var key in keysToDelete)
+            {
+                var itemToDelete = destKeyMap[key];
+                await deleteFunc(itemToDelete);
+                results.Deletes++;
+            }
         }
 
         return results;

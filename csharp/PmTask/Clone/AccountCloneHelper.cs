@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using ProjectManager.SDK;
+﻿using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
@@ -17,6 +15,9 @@ public class AccountCloneHelper
         await CloneProjectStatuses(src, dest, map);
         await CloneProjectFields(src, dest, map);
         await CloneResourceSkills(src, dest, map);
+        await CloneResourceTeams(src, dest, map);
+        await CloneTags(src, dest, map);
+        await CloneResources(src, dest, map);
         
         // Manager
         // what are these?
@@ -30,20 +31,6 @@ public class AccountCloneHelper
         
         // Project Field Value
         //var projectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(projectId);
-        
-        // Resource
-        var resources = await src.Resource.QueryResources();
-        Console.WriteLine($"Cloning {resources.Data.Length} resources");
-
-
-        // Teams
-        // Resource Team
-        var resourceTeams = await src.ResourceTeam.RetrieveResourceTeams();
-        Console.WriteLine($"Cloning {resourceTeams.Data.Length} resourceTeams");
-
-        // Tags
-        var tags = await src.Tag.QueryTags();
-        Console.WriteLine($"Cloning {tags.Data.Length} tags");
 
         // Tasks
         var tasks = await src.Task.QueryTasks();
@@ -68,6 +55,127 @@ public class AccountCloneHelper
         Console.WriteLine($"Cloning {timesheets.Data.Length} timesheets");
     }
 
+    private static async Task CloneResources(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        var srcResources = await src.Resource.QueryResources().ThrowOnError("Fetching from source");
+        var destResources = await dest.Resource.QueryResources().ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcResources.Data.Length} resources... ");
+        
+        // Special handling for resources: We aren't creating them with email addresses, because that would create
+        // users and link them to the test account.
+
+        var results = await SyncHelper.SyncData("Resource", srcResources.Data, destResources.Data, map,
+            r => $"{r.FirstName} {r.LastName}",
+            r => r.Id!.Value.ToString(),
+            (r1, r2) =>
+            {
+                return r1.Color == r2.Color
+                       && r1.FirstName == r2.FirstName
+                       && r1.LastName == r2.LastName
+                       && r1.AvatarUrl == r2.AvatarUrl
+                       && r1.City == r2.City
+                       && r1.ColorName == r2.ColorName
+                       && r1.Country == r2.Country
+                       && r1.CountryName == r2.CountryName
+                       && r1.HourlyRate == r2.HourlyRate
+                       && r1.Initials == r2.Initials
+                       && r1.IsActive == r2.IsActive
+                       && r1.Notes == r2.Notes
+                       && r1.Phone == r2.Phone
+                       && r1.Role == r2.Role
+                       && r1.State == r2.State;
+            },
+            async r =>
+            {
+                var teams = r.Teams
+                    .Select(t => t.Id!.Value.ToString())
+                    .Select(t => map.MapKey("ResourceTeam", t))
+                    .Select(Guid.Parse)
+                    .ToArray();
+                var skills = r.Skills
+                    .Select(t => t.Id!.Value.ToString())
+                    .Select(t => map.MapKey("ResourceSkill", t))
+                    .Select(Guid.Parse)
+                    .ToArray();
+                var result = await dest.Resource.CreateResource(new ResourceCreateDto()
+                {
+                    City = r.City,
+                    ColorName = r.ColorName,
+                    CountryCode = r.Country,
+                    Email = null,
+                    FirstName = r.FirstName,
+                    HourlyRate = r.HourlyRate,
+                    LastName = r.LastName,
+                    Notes = r.Notes,
+                    Phone = r.Phone,
+                    RoleId = null,
+                    State = r.State,
+                    TeamIds = teams,
+                    SkillIds = skills,
+
+                }).ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            null,
+            null
+        );
+        Console.WriteLine(results);
+    }
+
+    private static async Task CloneTags(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        var srcTags = await src.Tag.QueryTags().ThrowOnError("Fetching from source");
+        var destTags = await dest.Tag.QueryTags().ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcTags.Data.Length} tags... ");
+
+        var results = await SyncHelper.SyncData("Tag", srcTags.Data, destTags.Data, map,
+            t => t.Name,
+            t => t.Id!.Value.ToString(),
+            (t1, t2) => t1.Name == t2.Name && t1.Color == t2.Color,
+            async t =>
+            {
+                var result = await dest.Tag.CreateTag(new TagCreateDto() { Color = t.Color, Name = t.Name })
+                    .ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            null, // Updating can't rename a tag, only change its color
+            null // You can't delete tags
+        );
+        Console.WriteLine(results);
+    }
+
+    private static async Task CloneResourceTeams(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        var srcResourceTeams = await src.ResourceTeam.RetrieveResourceTeams()
+            .ThrowOnError("Fetching from source");
+        var destResourceTeams =
+            await dest.ResourceTeam.RetrieveResourceTeams().ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcResourceTeams.Data.Length} resourceTeams... ");
+
+        var results = await SyncHelper.SyncData("ResourceTeam", srcResourceTeams.Data, destResourceTeams.Data, map,
+            t => t.Name,
+            t => t.Id!.Value.ToString(),
+            (t1, t2) => t1.Name == t2.Name,
+            async t =>
+            {
+                var result = await dest.ResourceTeam.CreateResourceTeam(new CreateResourceTeamDto() { Name = t.Name })
+                    .ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            async (srcTeam, destTeam) =>
+            {
+                await dest.ResourceTeam
+                    .UpdateResourceTeam(destTeam.Id!.Value, new UpdateResourceTeamDto() { Name = srcTeam.Name })
+                    .ThrowOnError("Updating");
+            },
+            async t =>
+            {
+                await dest.ResourceTeam.DeleteResourceTeam(t.Id!.Value).ThrowOnError("Deleting");
+            }
+        );
+        Console.WriteLine(results);
+    }
+
     private static async Task CloneResourceSkills(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         // Resource Skill
@@ -76,18 +184,15 @@ public class AccountCloneHelper
             await dest.ResourceSkill.RetrieveResourceSkills().ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcResourceSkills.Data.Length} resourceSkills... ");
 
-        var results = await SyncHelper.SyncData(srcResourceSkills.Data, destResourceSkills.Data, map,
+        var results = await SyncHelper.SyncData("ResourceSkill", srcResourceSkills.Data, destResourceSkills.Data, map,
             s => s.Name,
             s => s.Id!.Value.ToString(),
+            (s1, s2) => s1.Name == s2.Name,
             async s =>
             {
                 var result = await dest.ResourceSkill
                     .CreateResourceSkill(new CreateResourceSkillDto() { Name = s.Name }).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
-            },
-            (s1, s2) =>
-            {
-                return s1.Name == s2.Name;
             },
             async (srcSkill, destSkill) =>
             {
@@ -111,22 +216,22 @@ public class AccountCloneHelper
             await dest.ProjectField.RetrieveProjectFields().ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcProjectFields.Data.Length} projectFields... ");
 
-        var results = await SyncHelper.SyncData(srcProjectFields.Data, destProjectFields.Data, map,
+        var results = await SyncHelper.SyncData("ProjectField", srcProjectFields.Data, destProjectFields.Data, map,
             pf => pf.Name,
             pf => pf.Id!.Value.ToString(),
-            async pf =>
-            {
-                var result = await dest.ProjectField.CreateProjectField(new ProjectFieldCreateDto()
-                        { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
-                    .ThrowOnError("Creating");
-                return result.Data.Id!.Value.ToString();
-            }, 
             (srcPf, destPf) =>
             {
                 return srcPf.Name == destPf.Name
                        && srcPf.Options == destPf.Options
                        && srcPf.Type == destPf.Type
                        && srcPf.ShortId == destPf.ShortId;
+            }, 
+            async pf =>
+            {
+                var result = await dest.ProjectField.CreateProjectField(new ProjectFieldCreateDto()
+                        { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
+                    .ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
             }, 
             null, // no updates available for project fields 
             async pf =>
@@ -195,9 +300,10 @@ public class AccountCloneHelper
             .ThrowOnError("Fetching from destination");
 
         // Execute the sync
-        var results = await SyncHelper.SyncData<ProjectCustomerDto>(srcCustomers.Data, destCustomers.Data, map,
+        var results = await SyncHelper.SyncData<ProjectCustomerDto>("ProjectCustomer", srcCustomers.Data, destCustomers.Data, map,
             c => c.Name,
             c => c.Id!.Value.ToString(),
+            (cSrc, cDest) => cSrc.Name == cDest.Name, 
             async c =>
             {
                 var created = await dest.ProjectCustomer.CreateProjectCustomer(new ProjectCustomerCreateDto()
@@ -206,7 +312,7 @@ public class AccountCloneHelper
                 }).ThrowOnError("Creating");
                 return created.Data.Id!.Value.ToString();
             },
-            (cSrc, cDest) => cSrc.Name == cDest.Name, async (cSrc, cDest) =>
+            async (cSrc, cDest) =>
             {
                 await dest.ProjectCustomer.UpdateProjectCustomer(cDest.Id!.Value, new ProjectCustomerCreateDto() { Name = cSrc.Name })
                     .ThrowOnError("Updating");
