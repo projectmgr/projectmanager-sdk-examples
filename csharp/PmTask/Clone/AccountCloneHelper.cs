@@ -16,6 +16,7 @@ public class AccountCloneHelper
         await CloneProjectFolders(src, dest, map);
         await CloneProjectStatuses(src, dest, map);
         await CloneProjectFields(src, dest, map);
+        await CloneResourceSkills(src, dest, map);
         
         // Manager
         // what are these?
@@ -34,10 +35,6 @@ public class AccountCloneHelper
         var resources = await src.Resource.QueryResources();
         Console.WriteLine($"Cloning {resources.Data.Length} resources");
 
-        // Skills
-        // Resource Skill
-        var resourceSkills = await src.ResourceSkill.RetrieveResourceSkills();
-        Console.WriteLine($"Cloning {resourceSkills.Data.Length} resourceSkills");
 
         // Teams
         // Resource Team
@@ -71,6 +68,41 @@ public class AccountCloneHelper
         Console.WriteLine($"Cloning {timesheets.Data.Length} timesheets");
     }
 
+    private static async Task CloneResourceSkills(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Resource Skill
+        var srcResourceSkills = await src.ResourceSkill.RetrieveResourceSkills().ThrowOnError("Fetching from source");
+        var destResourceSkills =
+            await dest.ResourceSkill.RetrieveResourceSkills().ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcResourceSkills.Data.Length} resourceSkills... ");
+
+        var results = await SyncHelper.SyncData(srcResourceSkills.Data, destResourceSkills.Data, map,
+            s => s.Name,
+            s => s.Id!.Value.ToString(),
+            async s =>
+            {
+                var result = await dest.ResourceSkill
+                    .CreateResourceSkill(new CreateResourceSkillDto() { Name = s.Name }).ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            (s1, s2) =>
+            {
+                return s1.Name == s2.Name;
+            },
+            async (srcSkill, destSkill) =>
+            {
+                var result = await dest.ResourceSkill
+                    .UpdateResourceSkill(destSkill.Id!.Value, new UpdateResourceSkillDto() { Name = srcSkill.Name })
+                    .ThrowOnError("Updating");
+            },
+            async s =>
+            {
+                await dest.ResourceSkill.DeleteResourceSkill(s.Id!.Value).ThrowOnError("Deleting");
+            }
+        );
+        Console.WriteLine(results);
+    }
+
     private static async Task CloneProjectFields(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         // Project Field
@@ -101,7 +133,7 @@ public class AccountCloneHelper
             {
                 await dest.ProjectField.DeleteProjectField(pf.Id!.Value.ToString()).ThrowOnError("Deleting");
             });
-        Console.WriteLine(results.ToString());
+        Console.WriteLine(results);
     }
 
     private static async Task CloneProjectStatuses(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
@@ -184,7 +216,7 @@ public class AccountCloneHelper
                 await dest.ProjectCustomer.DeleteProjectCustomer(c.Id!.Value)
                     .ThrowOnError("Deleting");
             });
-        Console.WriteLine(results.ToString());
+        Console.WriteLine(results);
     }
 
 }
