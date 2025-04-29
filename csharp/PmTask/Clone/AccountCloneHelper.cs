@@ -9,10 +9,10 @@ public class AccountCloneHelper
     {
         var map = new AccountMap();
         await CloneCustomers(src, dest, map);
-        await CloneProjectPriorities(src, dest, map);
-        await CloneProjectChargeCodes(src, dest, map);
-        await CloneProjectFolders(src, dest, map);
-        await CloneProjectStatuses(src, dest, map);
+        await MatchProjectPriorities(src, dest, map);
+        await MatchProjectChargeCodes(src, dest, map);
+        await MatchProjectFolders(src, dest, map);
+        await MatchProjectStatuses(src, dest, map);
         await CloneProjectFields(src, dest, map);
         await CloneResourceSkills(src, dest, map);
         await CloneResourceTeams(src, dest, map);
@@ -46,6 +46,12 @@ public class AccountCloneHelper
                        && p1.HourlyRate == p2.HourlyRate
                        && p1.Budget == p2.Budget
                        && p1.Description == p2.Description
+                       && p1.Folder.Id == p2.Folder.Id
+                       && p1.ChargeCode.Name == p2.ChargeCode.Name
+                       && p1.Manager.Name == p2.Manager.Name
+                       && p1.Customer.Name == p2.Customer.Name
+                       && p1.Status.Name == p2.Status.Name
+                       && p1.Priority.Name == p2.Priority.Name
                        && p1.StatusUpdate == p2.StatusUpdate;
             },
             async p =>
@@ -57,6 +63,12 @@ public class AccountCloneHelper
                     HourlyRate = p.HourlyRate,
                     Budget = p.Budget,
                     StatusUpdate = p.StatusUpdate,
+                    FolderId = map.MapKeyGuid("ProjectFolder", p.Folder.Id),
+                    ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode.Id),
+                    ManagerId = map.MapKeyGuid("Resource", p.Manager.Id),
+                    CustomerId = map.MapKeyGuid("ProjectCustomer", p.Customer.Id),
+                    StatusId = map.MapKeyGuid("ProjectStatus", p.Status.Id),
+                    PriorityId = map.MapKeyGuid("ProjectPriority", p.Priority.Id),
                 }).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
@@ -121,14 +133,12 @@ public class AccountCloneHelper
             async r =>
             {
                 var teams = r.Teams
-                    .Select(t => t.Id!.Value.ToString())
-                    .Select(t => map.MapKey("ResourceTeam", t))
-                    .Select(Guid.Parse)
+                    .Select(t => t.Id!.Value)
+                    .Select(t => map.MapKeyGuid("ResourceTeam", t))
                     .ToArray();
                 var skills = r.Skills
-                    .Select(t => t.Id!.Value.ToString())
-                    .Select(t => map.MapKey("ResourceSkill", t))
-                    .Select(Guid.Parse)
+                    .Select(t => t.Id!.Value)
+                    .Select(t => map.MapKeyGuid("ResourceSkill", t))
                     .ToArray();
                 var result = await dest.Resource.CreateResource(new ResourceCreateDto()
                 {
@@ -274,54 +284,58 @@ public class AccountCloneHelper
         Console.WriteLine(results);
     }
 
-    private static async Task CloneProjectStatuses(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    private static async Task MatchProjectStatuses(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        // Project statuses are not currently create-able from the API
-        
-        // Project Status
-        // var srcProjectStatuses = await src.ProjectStatus.RetrieveProjectStatuses().ThrowOnError("Fetching from source");
-        // var destProjectStatuses =
-        //     await dest.ProjectStatus.RetrieveProjectStatuses().ThrowOnError("Fetching from destination");
-        // Console.WriteLine($"Cloning {srcProjectStatuses.Data.Length} projectStatuses");
+        var srcProjectStatuses = await src.ProjectStatus.RetrieveProjectStatuses().ThrowOnError("Fetching from source");
+        var destProjectStatuses =
+            await dest.ProjectStatus.RetrieveProjectStatuses().ThrowOnError("Fetching from destination");
+        Console.WriteLine($"Comparing {srcProjectStatuses.Data.Length} projectStatuses.");
+
+        // Load up the mappings between source and destination
+        SyncHelper.MatchData("ProjectStatus", srcProjectStatuses.Data, destProjectStatuses.Data, map,
+                ps => ps.Name,
+                ps => ps.Id!.Value.ToString());
     }
 
-    private static async Task CloneProjectFolders(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    private static async Task MatchProjectFolders(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        // Project folders are not currently create-able from the API
-        
-        // Project Folder
-        // var srcProjectFolders = await src.ProjectFolder.RetrieveProjectFolders().ThrowOnError("Fetching from source");
-        // var destProjectFolders =
-        //     await dest.ProjectFolder.RetrieveProjectFolders().ThrowOnError("Fetching from destination");
-        // Console.WriteLine($"Cloning {projectFolders.Data.Length} projectFolders");
+        var srcProjectFolders = await src.ProjectFolder.RetrieveProjectFolders().ThrowOnError("Fetching from source");
+        var destProjectFolders =
+            await dest.ProjectFolder.RetrieveProjectFolders().ThrowOnError("Fetching from destination");
+        Console.WriteLine($"Comparing {srcProjectFolders.Data.Length} projectFolders.");
+
+        // Load up the mappings between source and destination
+        SyncHelper.MatchData("ProjectFolder", srcProjectFolders.Data, destProjectFolders.Data, map,
+            ps => ps.Name,
+            ps => ps.Id!.Value.ToString());
     }
 
-    private static async Task CloneProjectChargeCodes(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    private static async Task MatchProjectChargeCodes(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        // Project Charge Codes are not currently create-able from the API
+        var srcProjectChargeCodes =
+            await src.ProjectChargeCode.RetrieveChargeCodes().ThrowOnError("Fetching from source");
+        var destProjectChargeCodes =
+            await dest.ProjectChargeCode.RetrieveChargeCodes().ThrowOnError("Fetching from destination");
+        Console.WriteLine($"Comparing {srcProjectChargeCodes.Data.Length} projectChargeCodes.");
 
-        // Project Charge Code
-        // var srcProjectChargeCodes = await src.ProjectChargeCode.RetrieveChargeCodes().ThrowOnError("Fetching from source");
-        // var destProjectChargeCodes =
-        //     await dest.ProjectChargeCode.RetrieveChargeCodes().ThrowOnError("Fetching from destination");
-        // Console.Write($"Cloning {srcProjectChargeCodes.Data.Length} projectChargeCodes... ");
+        // Load up the mappings between source and destination
+        SyncHelper.MatchData("ProjectChargeCode", srcProjectChargeCodes.Data, destProjectChargeCodes.Data, map,
+            ps => ps.Name,
+            ps => ps.Id!.Value.ToString());
     }
 
-    private static async Task CloneProjectPriorities(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    private static async Task MatchProjectPriorities(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        // Project Priorities are not currently create-able from the API
-        
-        
-        // var srcProjectPriorities = await src.ProjectPriority.RetrieveProjectPriorities()
-        //     .ThrowOnError("Fetching from source");
-        // Console.Write($"Cloning {srcProjectPriorities.Data.Length} projectPriorities... ");
-        // var destProjectPriorities =
-        //     await dest.ProjectPriority.RetrieveProjectPriorities().ThrowOnError("Fetching from destination");
-        //
-        // // Execute the sync
-        // var results = await SyncHelper.SyncData(srcProjectPriorities.Data, destProjectPriorities.Data, map, 
-        //     p => p.Name,
-        //     p => p.Id?.ToString() ?? string.Empty,
+        var srcProjectPriorities = await src.ProjectPriority.RetrieveProjectPriorities()
+            .ThrowOnError("Fetching from source");
+        var destProjectPriorities =
+            await dest.ProjectPriority.RetrieveProjectPriorities().ThrowOnError("Fetching from destination");
+        Console.WriteLine($"Comparing {srcProjectPriorities.Data.Length} projectPriorities.");
+
+        // Load up the mappings between source and destination
+        SyncHelper.MatchData("ProjectPriority", srcProjectPriorities.Data, destProjectPriorities.Data, map,
+            ps => ps.Name,
+            ps => ps.Id!.Value.ToString());
     }
 
     private static async Task CloneCustomers(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)

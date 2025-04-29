@@ -22,4 +22,24 @@ public class AccountMap
 
         throw new Exception($"No match found for {category} key {key}");
     }
+    
+    public Guid? MapKeyGuid(string category, Guid? key)
+    {
+        if (key == null)
+        {
+            return null;
+        }
+        
+        var guidString = key.ToString();
+        var match = Items.FirstOrDefault(i => i.Category == category && i.OriginalPrimaryKey == guidString);
+        if (match != null)
+        {
+            if (Guid.TryParse(match.NewPrimaryKey, out var newGuid))
+            {
+                return newGuid;
+            }
+        }
+
+        return null;
+    }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
 
@@ -119,5 +120,37 @@ public class SyncHelper
         }
 
         return results;
+    }
+
+    public static void MatchData<T>(
+        string category,
+        T[] src, 
+        T[] dest, 
+        AccountMap map, 
+        Func<T, string> identityFunc, 
+        Func<T, string> primaryKeyFunc)
+    {
+        var results = new SyncResults();
+        
+        // Convert our destination list to a dictionary for fast lookup
+        var destMap = dest.ToDictionary(d => identityFunc(d));
+        var keysToDelete = dest.Select(d => primaryKeyFunc(d)).ToList();
+        foreach (var item in src)
+        { 
+            var identityString = identityFunc(item);
+            var primaryKeyString = primaryKeyFunc(item);
+            if (destMap.TryGetValue(identityString, out var matchingItem))
+            {
+                // If the objects are identical, no changes need to be made
+                string newPrimaryKey = primaryKeyFunc(matchingItem);
+                map.Items.Add(new AccountMap.AccountMapItem()
+                {
+                    Category = category,
+                    Identity = identityString,
+                    OriginalPrimaryKey = primaryKeyString,
+                    NewPrimaryKey = newPrimaryKey,
+                });
+            }
+        }
     }
 }
