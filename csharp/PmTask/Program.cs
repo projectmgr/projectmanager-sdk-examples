@@ -133,10 +133,16 @@ public static class Program
     }
 
     [Verb("clone-account", HelpText = "Clone one account into another")]
-    private class CloneAccountOptions : BaseOptions
+    private class CloneAccountOptions
     {
-        [Option("newkey", Required = true, HelpText = "The API key of the new account that will receive the cloned data")]
-        public string? NewAccountApiKey { get; set; }
+        [Option('s', "src", Required = true, HelpText = "The API key of the source account to clone")]
+        public string? SourceKey { get; set; }
+        
+        [Option('d', "dest", Required = true, HelpText = "The API key of the destination account that will receive the cloned data")]
+        public string? DestinationKey { get; set; }
+        
+        [Option('e', "env", HelpText = "The URL of the ProjectManager environment to use.  If not specified, uses the environment variable PM_ENV.")]
+        public string? Env { get; set; }
     }
     
     private	static Type[] LoadVerbs()
@@ -163,7 +169,11 @@ public static class Program
 
     private static async Task CloneAccount(CloneAccountOptions options)
     {
-        var src = await MakeClient(options);
+        var src = ProjectManagerClient
+            .WithEnvironment(options.Env)
+            .WithMachineName(Environment.MachineName)
+            .WithBearerToken(options.SourceKey)
+            .WithAppName("PmTask");
         if (src == null)
         {
             return;
@@ -183,9 +193,9 @@ public static class Program
         
         // Check privileges for destination account
         var dest = ProjectManagerClient
-            .WithEnvironment("production")
+            .WithEnvironment(options.Env)
             .WithMachineName(Environment.MachineName)
-            .WithBearerToken(options.NewAccountApiKey)
+            .WithBearerToken(options.DestinationKey)
             .WithAppName("PmTask");
         var destMe = await dest.Me.RetrieveMe();
         if (destMe.Data.Permissions.EditAllProjects != true)
