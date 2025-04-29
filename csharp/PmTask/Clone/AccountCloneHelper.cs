@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography;
+using System.Text;
 using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
@@ -94,7 +95,7 @@ public class AccountCloneHelper
             throw new Exception($"Problem fetching customers from source: {srcCustomers.Error.Message}");
         }
 
-        Console.WriteLine($"Cloning {srcCustomers.Data.Length} customers");
+        Console.Write($"Cloning {srcCustomers.Data.Length} customers... ");
 
         // Dest
         var destCustomers = await dest.ProjectCustomer.RetrieveProjectCustomers();
@@ -145,6 +146,7 @@ public class AccountCloneHelper
                     throw new Exception($"Project customer not deleted: {deleteResult.Error.Message}");
                 }
             });
+        Console.WriteLine(results.ToString());
     }
 
     private class SyncResults
@@ -152,6 +154,30 @@ public class AccountCloneHelper
         public int Creates { get; set; }
         public int Updates { get; set; }
         public int Deletes { get; set; }
+
+        public override string ToString()
+        {
+            if (Creates + Updates + Deletes == 0)
+            {
+                return "No changes.";
+            }
+            var sb = new StringBuilder();
+            if (Creates > 0)
+            {
+                sb.Append($"Created {Creates}, ");
+            }
+            if (Updates > 0)
+            {
+                sb.Append($"Updated {Updates}, ");
+            }
+            if (Deletes > 0)
+            {
+                sb.Append($"Deleted {Deletes}, ");
+            }
+
+            sb.Length -= 2;
+            return sb.ToString();
+        }
     }
     
     private static async Task<SyncResults> SyncData<T>(T[] src, T[] dest, AccountMap map, 
