@@ -154,13 +154,13 @@ public class AccountCloneHelper
                     var nv = new UpdateProjectFieldValueDto
                     {
                         Value = v.Value
-                    }; 
+                    };
                     var destFieldId = map.MapKeyGuid("ProjectField", v.Id) ?? Guid.Empty;
                     if (destFieldId == Guid.Empty)
                     {
                         throw new Exception($"No destination project field found for {v.Name}");
                     }
-                    var result = await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv).ThrowOnError("Creating");
+                    await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv).ThrowOnError("Creating");
                     return destFieldId.ToString();
                 },
                 async (sv, dv) =>
@@ -181,6 +181,46 @@ public class AccountCloneHelper
                 }
             );
             Console.WriteLine(results);
+
+            // Task Status
+            var srcTaskStatus = await src.TaskStatus.RetrieveTaskStatuses(srcProjectId);
+            var destTaskStatus = await dest.TaskStatus.RetrieveTaskStatuses(destProjectId);
+            Console.Write($"Cloning {srcTaskStatus.Data.Length} task statuses for project... ");
+
+            results = await SyncHelper.SyncData("TaskStatus", srcTaskStatus.Data, destTaskStatus.Data, map,
+                s => $"{srcProject.Name} - {s.Name}",
+                s => s.Id!.Value.ToString(),
+                (s1, s2) => s1.Name == s2.Name
+                            && s1.Order == s2.Order,
+                            // Currently, there is no way to create/update the IsDone property via the API - value is always false
+                            //&& s1.IsDone == s2.IsDone,
+                async s =>
+                {
+                    var ns = new TaskStatusCreateDto
+                    {
+                        Name = s.Name,
+                        Order = s.Order,
+                        IsDone = s.IsDone, // Currently, there is no way to create/update the IsDone property via the API - value is always false
+                    };
+                    var result = await dest.TaskStatus.CreateTaskStatus(destProjectId, ns).ThrowOnError("Creating");
+                    return result.Data.Id!.Value.ToString();
+                },
+                async (ss, ds) =>
+                {
+                    var us = new TaskStatusUpdateDto
+                    {
+                        Id = ds.Id,
+                        Name = ss.Name,
+                        Order = ss.Order,
+                    };
+                    await dest.TaskStatus.UpdateTaskStatus(destProjectId, us).ThrowOnError("Updating");
+                },
+                async v =>
+                {
+                    await dest.TaskStatus.DeleteTaskStatus(destProjectId, v.Id!.Value).ThrowOnError("Deleting");
+                }
+            );
+            Console.WriteLine(results);
         }
 
         // Tasks
@@ -190,7 +230,7 @@ public class AccountCloneHelper
         // Task Priority
         // Task Status
         //var taskStatus = await src.TaskStatus.RetrieveTaskStatuses(projectId);
-        
+
         // Task Tag
         //var taskTags = await src.TaskTag.ReplaceTaskTags(taskId);
         // Task ToDo
@@ -205,7 +245,7 @@ public class AccountCloneHelper
         var srcResources = await src.Resource.QueryResources(null, null, "isActive eq true").ThrowOnError("Fetching from source");
         var destResources = await dest.Resource.QueryResources(null, null, "isActive eq true").ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcResources.Data.Length} resources... ");
-        
+
         // Special handling for resources: We aren't creating them with email addresses, because that would create
         // users and link them to the test account.  Because of this, we eliminate first and last names, and only sync
         // on email addresses.  But when migrating data, all email addresses are moved to last names.
@@ -214,7 +254,7 @@ public class AccountCloneHelper
             if (!string.IsNullOrWhiteSpace(item.Email))
             {
                 item.FirstName = "Cloned";
-                item.LastName = item.Email.Replace('@','_');
+                item.LastName = item.Email.Replace('@', '_');
                 item.Email = string.Empty;
             }
         }
@@ -397,14 +437,14 @@ public class AccountCloneHelper
                        && srcPf.Options == destPf.Options
                        && srcPf.Type == destPf.Type
                        && srcPf.ShortId == destPf.ShortId;
-            }, 
+            },
             async pf =>
             {
                 var result = await dest.ProjectField.CreateProjectField(new ProjectFieldCreateDto()
-                        { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
+                { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
                     .ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
-            }, 
+            },
             null, // no updates available for project fields 
             async pf =>
             {
@@ -479,7 +519,7 @@ public class AccountCloneHelper
         var results = await SyncHelper.SyncData<ProjectCustomerDto>("ProjectCustomer", srcCustomers.Data, destCustomers.Data, map,
             c => c.Name,
             c => c.Id!.Value.ToString(),
-            (cSrc, cDest) => cSrc.Name == cDest.Name, 
+            (cSrc, cDest) => cSrc.Name == cDest.Name,
             async c =>
             {
                 var created = await dest.ProjectCustomer.CreateProjectCustomer(new ProjectCustomerCreateDto()
@@ -500,5 +540,4 @@ public class AccountCloneHelper
             });
         Console.WriteLine(results);
     }
-
 }
