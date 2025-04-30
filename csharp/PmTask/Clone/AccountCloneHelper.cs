@@ -87,9 +87,10 @@ public class AccountCloneHelper
                 continue;
             }
 
-            // Project Members
-            var srcProjectMembers = await src.ProjectMembers.RetrieveProjectMembers(srcProjectId, false).ThrowOnError("Fetching from source");
-            var destProjectMembers = await dest.ProjectMembers.RetrieveProjectMembers(destProjectId!, false).ThrowOnError("Fetching from destination");
+            //// Project Members
+            //var srcProjectMembers = await src.ProjectMembers.RetrieveProjectMembers(srcProjectId, false).ThrowOnError("Fetching from source");
+            //var destProjectMembers = await dest.ProjectMembers.RetrieveProjectMembers(destProjectId!, false).ThrowOnError("Fetching from destination");
+            //Console.Write($"Cloning {srcProjectMembers.Data.Length} project members for project... ");
 
             // Because Resources have been created without an email address, they cannot have any other Role assigned to them except the default None role.
             // Resources with the None role are only present in the Resources table, not in the BusinessUsers table. The problem we have here is that when we
@@ -135,10 +136,52 @@ public class AccountCloneHelper
             );
             Console.WriteLine(results);
             */
-        }
 
-        // Project Field Value
-        //var projectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(projectId);
+            // Project Field Values
+            var srcProjectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(srcProjectId);
+            var destProjectFieldValues = await dest.ProjectField.RetrieveAllProjectFieldValues(destProjectId);
+            Console.Write($"Cloning {srcProjectFieldValues.Data.Length} project field values for project... ");
+
+            results = await SyncHelper.SyncData("ProjectFieldValue", srcProjectFieldValues.Data, destProjectFieldValues.Data, map,
+                v => $"{srcProject.Name} - {v.Name}",
+                v => v.Id!.Value.ToString(),
+                (v1, v2) => v1.ShortId == v2.ShortId
+                            && v1.Name == v2.Name
+                            && v1.Type == v2.Type
+                            && v1.Value == v2.Value,
+                async v =>
+                {
+                    var nv = new UpdateProjectFieldValueDto
+                    {
+                        Value = v.Value
+                    }; 
+                    var destFieldId = map.MapKeyGuid("ProjectField", v.Id) ?? Guid.Empty;
+                    if (destFieldId == Guid.Empty)
+                    {
+                        throw new Exception($"No destination project field found for {v.Name}");
+                    }
+                    var result = await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv).ThrowOnError("Creating");
+                    return destFieldId.ToString();
+                },
+                async (sv, dv) =>
+                {
+                    var uv = new UpdateProjectFieldValueDto
+                    {
+                        Value = sv.Value
+                    };
+                    await dest.ProjectField.UpdateProjectFieldValue(destProjectId, dv.Id!.ToString(), uv).ThrowOnError("Updating");
+                },
+                async v =>
+                {
+                    var uv = new UpdateProjectFieldValueDto
+                    {
+                        Value = string.Empty
+                    };
+                    await dest.ProjectField.UpdateProjectFieldValue(destProjectId, v.Id!.ToString(), uv).ThrowOnError("Clearing");
+                }
+            );
+            Console.WriteLine(results);
+        }
 
         // Tasks
         var tasks = await src.Task.QueryTasks();
