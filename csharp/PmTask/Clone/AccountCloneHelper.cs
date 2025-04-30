@@ -33,7 +33,7 @@ public class AccountCloneHelper
 
     private static async Task CloneProjects(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        var srcProjects = await src.Project.QueryProjects().ThrowOnError("Fetching from source");
+        var srcProjects = await src.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from source");
         var destProjects = await dest.Project.QueryProjects().ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcProjects.Data.Length} projects... ");
 
@@ -46,11 +46,10 @@ public class AccountCloneHelper
                        && p1.HourlyRate == p2.HourlyRate
                        && p1.Budget == p2.Budget
                        && p1.Description == p2.Description
-                       && p1.Folder.Id == p2.Folder.Id
-                       && p1.ChargeCode.Name == p2.ChargeCode.Name
-                       && p1.Manager.Name == p2.Manager.Name
-                       && p1.Customer.Name == p2.Customer.Name
-                       && p1.Status.Name == p2.Status.Name
+                       && p1.Folder?.Name == p2.Folder?.Name
+                       && p1.ChargeCode?.Name == p2.ChargeCode?.Name
+                       && p1.Customer?.Name == p2.Customer?.Name
+                       && p1.Status.Name == p2.Status?.Name
                        && p1.Priority.Name == p2.Priority.Name
                        && p1.StatusUpdate == p2.StatusUpdate;
             },
@@ -63,10 +62,10 @@ public class AccountCloneHelper
                     HourlyRate = p.HourlyRate,
                     Budget = p.Budget,
                     StatusUpdate = p.StatusUpdate,
-                    FolderId = map.MapKeyGuid("ProjectFolder", p.Folder.Id),
-                    ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode.Id),
-                    ManagerId = map.MapKeyGuid("Resource", p.Manager.Id),
-                    CustomerId = map.MapKeyGuid("ProjectCustomer", p.Customer.Id),
+                    FolderId = map.MapKeyGuid("ProjectFolder", p.Folder?.Id),
+                    ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode?.Id),
+                    ManagerId = map.MapKeyGuid("Resource", p.Manager?.Id),
+                    CustomerId = map.MapKeyGuid("ProjectCustomer", p.Customer?.Id),
                     StatusId = map.MapKeyGuid("ProjectStatus", p.Status.Id),
                     PriorityId = map.MapKeyGuid("ProjectPriority", p.Priority.Id),
                 };
@@ -74,7 +73,10 @@ public class AccountCloneHelper
                 return result.Data.Id!.Value.ToString();
             },
             null,
-            null);
+            async p =>
+            {
+                await dest.Project.DeleteProject(p.Id!.Value, true).ThrowOnError("Deleting");
+            });
         Console.WriteLine(results);
         
         // Project Members
