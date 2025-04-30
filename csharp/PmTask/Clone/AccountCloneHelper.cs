@@ -19,6 +19,7 @@ public class AccountCloneHelper
         await CloneTags(src, dest, map);
         await CloneResources(src, dest, map);
         await CloneProjects(src, dest, map);
+        await CloneTasks(src, dest, map);
         await CloneTimesheets(src, dest, map);
     }
 
@@ -76,8 +77,11 @@ public class AccountCloneHelper
             });
         Console.WriteLine(results);
 
+        var projectCount = srcProjects.Data.Length;
+        var progressCount = 0;
         foreach (var srcProject in srcProjects.Data)
         {
+            progressCount++;
             var srcProjectId = srcProject.Id!.Value;
             var destProjectId = map.MapKeyGuid("Project", srcProjectId) ?? Guid.Empty;
 
@@ -90,7 +94,7 @@ public class AccountCloneHelper
             //// Project Members
             //var srcProjectMembers = await src.ProjectMembers.RetrieveProjectMembers(srcProjectId, false).ThrowOnError("Fetching from source");
             //var destProjectMembers = await dest.ProjectMembers.RetrieveProjectMembers(destProjectId!, false).ThrowOnError("Fetching from destination");
-            //Console.Write($"Cloning {srcProjectMembers.Data.Length} project members for project... ");
+            //Console.Write($"Cloning {srcProjectMembers.Data.Length} project members for project [{progressCount}/{projectCount}]... ");
 
             // Because Resources have been created without an email address, they cannot have any other Role assigned to them except the default None role.
             // Resources with the None role are only present in the Resources table, not in the BusinessUsers table. The problem we have here is that when we
@@ -140,7 +144,7 @@ public class AccountCloneHelper
             // Project Field Values
             var srcProjectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(srcProjectId);
             var destProjectFieldValues = await dest.ProjectField.RetrieveAllProjectFieldValues(destProjectId);
-            Console.Write($"Cloning {srcProjectFieldValues.Data.Length} project field values for project... ");
+            Console.Write($"Cloning {srcProjectFieldValues.Data.Length} project field values for project [{progressCount}/{projectCount}]... ");
 
             results = await SyncHelper.SyncData("ProjectFieldValue", srcProjectFieldValues.Data, destProjectFieldValues.Data, map,
                 v => $"{srcProject.Name} - {v.Name}",
@@ -185,7 +189,7 @@ public class AccountCloneHelper
             // Task Status
             var srcTaskStatus = await src.TaskStatus.RetrieveTaskStatuses(srcProjectId);
             var destTaskStatus = await dest.TaskStatus.RetrieveTaskStatuses(destProjectId);
-            Console.Write($"Cloning {srcTaskStatus.Data.Length} task statuses for project... ");
+            Console.Write($"Cloning {srcTaskStatus.Data.Length} task statuses for project [{progressCount}/{projectCount}]... ");
 
             results = await SyncHelper.SyncData("TaskStatus", srcTaskStatus.Data, destTaskStatus.Data, map,
                 s => $"{srcProject.Name} - {s.Name}",
@@ -225,7 +229,7 @@ public class AccountCloneHelper
             // Task Fields
             var srcTaskFields = await src.TaskField.RetrieveTaskFields(srcProjectId).ThrowOnError("Fetching from source");
             var destTaskFields = await dest.TaskField.RetrieveTaskFields(destProjectId).ThrowOnError("Fetching from destination");
-            Console.Write($"Cloning {srcTaskFields.Data.Length} task fields for project... ");
+            Console.Write($"Cloning {srcTaskFields.Data.Length} task fields for project [{progressCount}/{projectCount}]... ");
 
             results = await SyncHelper.SyncData("TaskField", srcTaskFields.Data, destTaskFields.Data, map,
                 tf => $"{srcProject.Name} - {tf.Name}",
@@ -254,10 +258,6 @@ public class AccountCloneHelper
             );
             Console.WriteLine(results);
         }
-
-        // Tasks
-        var tasks = await src.Task.QueryTasks();
-        Console.WriteLine($"Cloning {tasks.Data.Length} tasks");
 
         // Task Tag
         //var taskTags = await src.TaskTag.ReplaceTaskTags(taskId);
@@ -377,6 +377,129 @@ public class AccountCloneHelper
             },
             null, // Updating can't rename a tag, only change its color
             null // You can't delete tags
+        );
+        Console.WriteLine(results);
+    }
+
+    private static async Task CloneTasks(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        var srcTasks = await src.Task.QueryTasks().ThrowOnError("Fetching from source");
+        var destTasks = await dest.Task.QueryTasks().ThrowOnError("Fetching from destination");
+
+        // Source Tasks also include tasks from Deleted Projects, which we are not mapping. Filter
+        // those tasks out by checking the ProjectId against the Project map list.
+        // Tasks should be processed in order of their WBS numbers.
+        var filteredSrcTasks = srcTasks.Data
+            .Where(t => t.ProjectId != null && map.MapKeyGuid("Project", t.ProjectId) != null)
+            .OrderBy(t => t.ProjectId)
+            .ThenBy(t => t.Wbs)
+            .ToArray();
+        Console.Write($"Cloning {filteredSrcTasks} tasks... ");
+
+        var results = await SyncHelper.SyncData("Task", filteredSrcTasks, destTasks.Data, map,
+            t => t.Name,
+            t => t.Id!.Value.ToString(),
+            (t1, t2) => // Compare all fields that we actually can set with Create or Update
+                        t1.Name == t2.Name
+                        && (t1.Description ?? string.Empty) == (t2.Description ?? string.Empty)
+                        && t1.Status?.Name == t2.Status?.Name
+                        && t1.PlannedStartDate == t2.PlannedStartDate
+                        && t1.PlannedFinishDate == t2.PlannedFinishDate
+                        && t1.ActualStartDate == t2.ActualStartDate
+                        && t1.ActualFinishDate == t2.ActualFinishDate
+                        && t1.PercentComplete == t2.PercentComplete
+                        && t1.IsLocked == t2.IsLocked
+                        && t1.IsMilestone == t2.IsMilestone
+                        && t1.PriorityId == t2.PriorityId
+                        && t1.Theme == t2.Theme
+                        && (t1.ActualCost ?? 0M) == (t2.ActualCost ?? 0M)
+                        && (t1.PlannedCost ?? 0M) == (t2.PlannedCost ?? 0M)
+                        && t1.PlannedDuration == t2.PlannedDuration
+                        && (t1.PlannedEffort ?? 0) == (t2.PlannedEffort ?? 0),
+            async t =>
+            {
+                var nAssignees = new List<Guid>();
+                foreach (var tAssignee in t.Assignees)
+                {
+                    var nAssigneeId = map.MapKeyGuid("Resource", tAssignee.Id);
+                    if (nAssigneeId != null && nAssigneeId != Guid.Empty)
+                    {
+                        nAssignees.Add(nAssigneeId.Value);
+                    }
+                }
+
+                var nt = new TaskCreateDto
+                {
+                    Name = t.Name,
+                    Description = t.Description,
+                    PercentComplete = t.PercentComplete,
+                    PriorityId = t.PriorityId,
+                    PlannedStartDate = t.PlannedStartDate,
+                    PlannedFinishDate = t.PlannedFinishDate,
+                    PlannedDuration = t.PlannedDuration,
+                    PlannedEffort = t.PlannedEffort,
+                    PlannedCost = t.PlannedCost,
+                    ActualStartDate = t.ActualStartDate,
+                    ActualCost = t.ActualCost,
+                    Theme = t.Theme,
+                    IsLocked = t.IsLocked,
+                    IsMilestone = t.IsMilestone,
+                    StatusId = map.MapKeyGuid("TaskStatus", t.Status.Id),
+                    Assignees = nAssignees.ToArray()
+
+                };
+                var srcProjectId = t.ProjectId;
+                var destProjectId = map.MapKeyGuid("Project", srcProjectId) ?? Guid.Empty;
+
+                if (destProjectId == Guid.Empty)
+                {
+                    throw new Exception($"No destination project found for {t.Name}");
+                }
+                var result = await dest.Task.CreateTask(destProjectId, nt).ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            async (st, dt) =>
+            {
+                var ut = new TaskUpdateDto
+                {
+                    Name = st.Name,
+                    Description = st.Description,
+                    PercentComplete = st.PercentComplete,
+                    PriorityId = st.PriorityId,
+                    PlannedEffort = st.PlannedEffort,
+                    PlannedCost = st.PlannedCost,
+                    ActualStartDate = st.ActualStartDate,
+                    ActualFinishDate = st.ActualFinishDate,
+                    ActualCost = st.ActualCost,
+                    Theme = st.Theme,
+                    IsLocked = st.IsLocked,
+                    IsMilestone = st.IsMilestone,
+                    StatusId = map.MapKeyGuid("TaskStatus", st.Status.Id),
+                };
+                // Cannot update all Planned data at the same time - so only update if different
+                var updatePlannedCount = 0;
+                if (st.PlannedStartDate != dt.PlannedStartDate)
+                {
+                    ut.PlannedStartDate = st.PlannedStartDate;
+                    updatePlannedCount++;
+                }
+                if (st.PlannedFinishDate != dt.PlannedFinishDate)
+                {
+                    ut.PlannedFinishDate = st.PlannedFinishDate;
+                    updatePlannedCount++;
+                }
+                // Don't set Duration if we have set both Start and Finish dates (even if it is different)
+                if (st.PlannedDuration != dt.PlannedDuration && updatePlannedCount != 2)
+                {
+                    ut.PlannedDuration = st.PlannedDuration;
+                }
+
+                await dest.Task.UpdateTask(dt.Id!.Value, ut).ThrowOnError("Updating");
+            },
+            async t =>
+            {
+                await dest.Task.DeleteTask(t.Id!.Value).ThrowOnError("Deleting");
+            }
         );
         Console.WriteLine(results);
     }
