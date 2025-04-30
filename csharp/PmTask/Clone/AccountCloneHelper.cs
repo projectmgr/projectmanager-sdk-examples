@@ -127,19 +127,17 @@ public class AccountCloneHelper
             (r1, r2) =>
             {
                 return r1.Color == r2.Color
-                       && r1.FirstName == r2.FirstName
-                       && r1.LastName == r2.LastName
+                       && String.Equals(r1.FirstName, r2.FirstName, StringComparison.InvariantCultureIgnoreCase)
+                       && String.Equals(r1.LastName, r2.LastName, StringComparison.InvariantCultureIgnoreCase)
                        && r1.AvatarUrl == r2.AvatarUrl
                        && r1.City == r2.City
                        && r1.ColorName == r2.ColorName
                        && r1.Country == r2.Country
                        && r1.CountryName == r2.CountryName
                        && r1.HourlyRate == r2.HourlyRate
-                       && r1.Initials == r2.Initials
                        && r1.IsActive == r2.IsActive
                        && r1.Notes == r2.Notes
                        && r1.Phone == r2.Phone
-                       && r1.Role == r2.Role
                        && r1.State == r2.State;
             },
             async r =>
