@@ -193,8 +193,8 @@ public class AccountCloneHelper
                 s => s.Id!.Value.ToString(),
                 (s1, s2) => s1.Name == s2.Name
                             && s1.Order == s2.Order,
-                            // Currently, there is no way to create/update the IsDone property via the API - value is always false
-                            //&& s1.IsDone == s2.IsDone,
+                // Currently, there is no way to create/update the IsDone property via the API - value is always false
+                //&& s1.IsDone == s2.IsDone,
                 async s =>
                 {
                     var ns = new TaskStatusCreateDto
@@ -222,6 +222,38 @@ public class AccountCloneHelper
                 }
             );
             Console.WriteLine(results);
+
+            // Task Fields
+            var srcTaskFields = await src.TaskField.RetrieveTaskFields(srcProjectId).ThrowOnError("Fetching from source");
+            var destTaskFields = await dest.TaskField.RetrieveTaskFields(destProjectId).ThrowOnError("Fetching from destination");
+            Console.Write($"Cloning {srcTaskFields.Data.Length} task fields for project... ");
+
+            results = await SyncHelper.SyncData("TaskField", srcTaskFields.Data, destTaskFields.Data, map,
+                tf => $"{srcProject.Name} - {tf.Name}",
+                tf => tf.Id!.Value.ToString(),
+                (tf1, tf2) => tf1.Name == tf2.Name
+                                   && tf1.Options == tf2.Options
+                                   && tf1.Type == tf2.Type
+                                   && tf1.ShortId == tf2.ShortId,
+                async tf =>
+                {
+                    var ntf = new CreateTaskFieldDto
+                    {
+                        Name = tf.Name,
+                        Type = tf.Type,
+                        Options = tf.Options,
+                        ShortId = tf.ShortId
+                    };
+                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
+                    return result.Data.Id!.Value.ToString();
+                },
+                null, // no updates available for task fields 
+                async tf =>
+                {
+                    await dest.TaskField.DeleteTaskField(destProjectId, tf.Id!.Value).ThrowOnError("Deleting");
+                }
+            );
+            Console.WriteLine(results);
         }
 
         // Tasks
@@ -232,9 +264,6 @@ public class AccountCloneHelper
         //var taskTags = await src.TaskTag.ReplaceTaskTags(taskId);
         // Task ToDo
         //var taskToDos = await src.TaskTodo.GetTodos(taskId);
-        // Task Field
-        var taskFields = await src.TaskField.QueryTaskFields();
-        Console.WriteLine($"Cloning {taskFields.Data.Length} taskFields");
     }
 
     private static async Task CloneResources(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
