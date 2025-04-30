@@ -40,22 +40,19 @@ public class AccountCloneHelper
         var results = await SyncHelper.SyncData("Project", srcProjects.Data, destProjects.Data, map,
             p => p.Name,
             p => p.Id!.Value.ToString(),
-            (p1, p2) =>
-            {
-                return p1.Name == p2.Name
-                       && p1.HourlyRate == p2.HourlyRate
-                       && p1.Budget == p2.Budget
-                       && p1.Description == p2.Description
-                       && p1.Folder?.Name == p2.Folder?.Name
-                       && p1.ChargeCode?.Name == p2.ChargeCode?.Name
-                       && p1.Customer?.Name == p2.Customer?.Name
-                       && p1.Status.Name == p2.Status?.Name
-                       && p1.Priority.Name == p2.Priority.Name
-                       && p1.StatusUpdate == p2.StatusUpdate;
-            },
+            (p1, p2) => p1.Name == p2.Name
+                        && p1.HourlyRate == p2.HourlyRate
+                        && p1.Budget == p2.Budget
+                        && p1.Description == p2.Description
+                        && p1.Folder?.Name == p2.Folder?.Name
+                        && p1.ChargeCode?.Name == p2.ChargeCode?.Name
+                        && p1.Customer?.Name == p2.Customer?.Name
+                        && p1.Status.Name == p2.Status?.Name
+                        && p1.Priority.Name == p2.Priority.Name
+                        && p1.StatusUpdate == p2.StatusUpdate,
             async p =>
             {
-                var np = new ProjectCreateDto()
+                var np = new ProjectCreateDto
                 {
                     Name = p.Name,
                     Description = p.Description,
@@ -78,11 +75,68 @@ public class AccountCloneHelper
                 await dest.Project.DeleteProject(p.Id!.Value, true).ThrowOnError("Deleting");
             });
         Console.WriteLine(results);
-        
-        // Project Members
-        //var projectId = Guid.Empty;
-        //var projectMembers = await src.ProjectMembers.RetrieveProjectMembers(projectId, false);
-        
+
+        foreach (var srcProject in srcProjects.Data)
+        {
+            var srcProjectId = srcProject.Id!.Value;
+            var destProjectId = map.MapKeyGuid("Project", srcProjectId) ?? Guid.Empty;
+
+            if (destProjectId == Guid.Empty)
+            {
+                Console.WriteLine($"No destination project found for {srcProject.Name}");
+                continue;
+            }
+
+            // Project Members
+            var srcProjectMembers = await src.ProjectMembers.RetrieveProjectMembers(srcProjectId, false).ThrowOnError("Fetching from source");
+            var destProjectMembers = await dest.ProjectMembers.RetrieveProjectMembers(destProjectId!, false).ThrowOnError("Fetching from destination");
+
+            // Because Resources have been created without an email address, they cannot have any other Role assigned to them except the default None role.
+            // Resources with the None role are only present in the Resources table, not in the BusinessUsers table. The problem we have here is that when we
+            // try and assign the Guest role/permission to a Resource, it tries to write an entry in the ProjectAccess table, which throws a foreign key error
+            //      The INSERT statement conflicted with the FOREIGN KEY constraint "FK_ProjectAccess_aspnet_Users".
+            //      The conflict occurred in database "pmproject", table "dbo.BusinessUser", column 'UserId'.
+            /*
+            results = await SyncHelper.SyncData("ProjectMember", srcProjectMembers.Data, destProjectMembers.Data, map,
+                m => m.Name,
+                m => m.Id!.Value.ToString(),
+                (m1, m2) => m1.Initials == m2.Initials
+                            && m1.Name == m2.Name
+                            && m1.AvatarUrl == m2.AvatarUrl
+                            // Cannot compare on Permission because destination can only be added as Guest
+                            //&& m1.Permission == m2.Permission
+                            && m1.Color == m2.Color,
+                async m =>
+                {
+                    var nm = new ProjectMemberRoleDto
+                    {
+                        Role = "Guest"
+                    };
+                    var destMemberId = map.MapKeyGuid("Resource", m.Id) ?? Guid.Empty;
+                    if (destMemberId == Guid.Empty)
+                    {
+                        throw new Exception($"No destination resource found for {m.Name}");
+                    }
+                    var result = await dest.ProjectMembers.CreateUserProjectMembership(destProjectId, destMemberId, nm).ThrowOnError("Creating");
+                    return result.Data.Id!.Value.ToString();
+                },
+                async (sm, dm) =>
+                {
+                    var um = new ProjectMemberRoleDto
+                    {
+                        Role = sm.Permission
+                    };
+                    await dest.ProjectMembers.UpdateUserProjectMembership(destProjectId, dm.Id!.Value, um).ThrowOnError("Updating");
+                },
+                async m =>
+                {
+                    await dest.ProjectMembers.RemoveUserProjectMembership(destProjectId, m.Id!.Value).ThrowOnError("Removing");
+                }
+            );
+            Console.WriteLine(results);
+            */
+        }
+
         // Project Field Value
         //var projectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(projectId);
 
