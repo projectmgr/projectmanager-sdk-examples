@@ -56,7 +56,7 @@ public class AccountCloneHelper
             },
             async p =>
             {
-                var result = await dest.Project.CreateProject(new ProjectCreateDto()
+                var np = new ProjectCreateDto()
                 {
                     Name = p.Name,
                     Description = p.Description,
@@ -69,7 +69,8 @@ public class AccountCloneHelper
                     CustomerId = map.MapKeyGuid("ProjectCustomer", p.Customer.Id),
                     StatusId = map.MapKeyGuid("ProjectStatus", p.Status.Id),
                     PriorityId = map.MapKeyGuid("ProjectPriority", p.Priority.Id),
-                }).ThrowOnError("Creating");
+                };
+                var result = await dest.Project.CreateProject(np).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
             null,
@@ -102,8 +103,8 @@ public class AccountCloneHelper
 
     private static async Task CloneResources(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        var srcResources = await src.Resource.QueryResources().ThrowOnError("Fetching from source");
-        var destResources = await dest.Resource.QueryResources().ThrowOnError("Fetching from destination");
+        var srcResources = await src.Resource.QueryResources(null, null, "isActive eq true").ThrowOnError("Fetching from source");
+        var destResources = await dest.Resource.QueryResources(null, null, "isActive eq true").ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcResources.Data.Length} resources... ");
         
         // Special handling for resources: We aren't creating them with email addresses, because that would create
@@ -115,13 +116,13 @@ public class AccountCloneHelper
             {
                 item.FirstName = "Cloned";
                 item.LastName = item.Email.Replace('@','_');
-                item.Email = null;
+                item.Email = string.Empty;
             }
         }
         var filteredDestResources = destResources.Data.Where(r => String.IsNullOrWhiteSpace(r.Email)).ToArray();
 
         var results = await SyncHelper.SyncData("Resource", srcResources.Data, filteredDestResources, map,
-            r => $"{r.FirstName} {r.LastName}",
+            r => $"{r.FirstName} {r.LastName}".ToLowerInvariant(),
             r => r.Id!.Value.ToString(),
             (r1, r2) =>
             {
