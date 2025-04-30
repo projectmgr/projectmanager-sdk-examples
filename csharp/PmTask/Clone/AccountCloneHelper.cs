@@ -1,4 +1,4 @@
-﻿using ProjectManager.SDK;
+using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
@@ -394,7 +394,7 @@ public class AccountCloneHelper
             .OrderBy(t => t.ProjectId)
             .ThenBy(t => t.Wbs)
             .ToArray();
-        Console.Write($"Cloning {filteredSrcTasks} tasks... ");
+        Console.Write($"Cloning {filteredSrcTasks.Length} tasks... ");
 
         var results = await SyncHelper.SyncData("Task", filteredSrcTasks, destTasks.Data, map,
             t => t.Name,
