@@ -13,7 +13,6 @@ public class AccountCloneHelper
         await MatchProjectChargeCodes(src, dest, map);
         await MatchProjectFolders(src, dest, map);
         await MatchProjectStatuses(src, dest, map);
-        await MatchTaskPriorities(src, dest, map);
         await CloneProjectFields(src, dest, map);
         await CloneResourceSkills(src, dest, map);
         await CloneResourceTeams(src, dest, map);
@@ -531,19 +530,6 @@ public class AccountCloneHelper
         SyncHelper.MatchData("ProjectPriority", srcProjectPriorities.Data, destProjectPriorities.Data, map,
             ps => ps.Name,
             ps => ps.Id!.Value.ToString());
-    }
-
-    private static async Task MatchTaskPriorities(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
-    {
-        var srcTaskPriorities = await src.Task.RetrieveTaskPriorities().ThrowOnError("Fetching from source");
-        var destTaskPriorities = await dest.Task.RetrieveTaskPriorities().ThrowOnError("Fetching from destination");
-        Console.WriteLine($"Comparing {srcTaskPriorities.Data.Length} TaskPriorities.");
-
-        // Load up the mappings between source and destination
-        SyncHelper.MatchData("TaskPriority", srcTaskPriorities.Data, destTaskPriorities.Data, map,
-            tp => tp.Name,
-            tp => tp.Id?.ToString() ?? string.Empty // The id of the None priority is null
-        );
     }
 
     private static async Task CloneCustomers(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
