@@ -1,4 +1,4 @@
-using ProjectManager.SDK;
+﻿using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
@@ -388,15 +388,15 @@ public class AccountCloneHelper
 
         // Source Tasks also include tasks from Deleted Projects, which we are not mapping. Filter
         // those tasks out by checking the ProjectId against the Project map list.
-        // Tasks should be processed in order of their WBS numbers.
         var filteredSrcTasks = srcTasks.Data
             .Where(t => t.ProjectId != null && map.MapKeyGuid("Project", t.ProjectId) != null)
-            .OrderBy(t => t.ProjectId)
-            .ThenBy(t => t.Wbs)
-            .ToArray();
-        Console.Write($"Cloning {filteredSrcTasks.Length} tasks... ");
+            .ToList();
+        Console.Write($"Cloning {filteredSrcTasks.Count} tasks... ");
 
-        var results = await SyncHelper.SyncData("Task", filteredSrcTasks, destTasks.Data, map,
+        // Tasks should be processed in order of their WBS numbers.
+        filteredSrcTasks.Sort(new WbsSortHelper());
+
+        var results = await SyncHelper.SyncData("Task", filteredSrcTasks.ToArray(), destTasks.Data, map,
             t => t.Name,
             t => t.Id!.Value.ToString(),
             (t1, t2) => // Compare all fields that we actually can set with Create or Update
