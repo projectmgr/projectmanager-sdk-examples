@@ -33,11 +33,40 @@ public class AccountCloneHelper
 
     private static async Task CloneTimesheets(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
-        // Task Field Value
-        //var taskFieldValues = await src.TaskField.RetrieveAllTaskFieldValues(taskId);
-        // Timesheet
-        var timesheets = await src.Timesheet.QueryTimeSheets();
-        Console.WriteLine($"Cloning {timesheets.Data.Length} timesheets");
+        var srcTimesheets = await src.Timesheet.QueryTimeSheets(null, null, "Minutes gt 0")
+            .ThrowOnError("Fetching from source");
+        var destTimesheets = await dest.Timesheet.QueryTimeSheets(null, null, "Minutes gt 0")
+            .ThrowOnError("Fetching from destination");
+        Console.Write($"Cloning {srcTimesheets.Data.Length} timesheets...");
+
+        var results = await SyncHelper.SyncData("Timesheet", srcTimesheets.Data, destTimesheets.Data, map,
+            t =>
+                $"{t.Date} {t.Resource?.FirstName} {t.Resource?.LastName} {t.Project?.Name} {t.Task?.Name} {t.AdminType?.Name}",
+            t => t.Id!.Value.ToString(),
+            (t1, t2) => t1.Date == t2.Date
+                        && t1.Hours == t2.Hours
+                        && t1.Minutes == t2.Minutes
+                        // Can't set "approved" status here, so can't compare on it
+                        && t1.Notes == t2.Notes,
+            async t =>
+            {
+                var request = new TimesheetCreateRequestDto()
+                {
+                    ResourceId = map.MapKeyGuid("Resource", t.ResourceId),
+                    TaskId = map.MapKeyGuid("Task", t.TaskId),
+                    AdminTypeId = t.AdminType?.Id,
+                    Date = t.Date,
+                    Hours = t.Hours,
+                    Minutes = t.Minutes,
+                    Notes = t.Notes,
+                    // Can't set "approved" status here
+                };
+                var result = await dest.Timesheet.CreateTimeEntry(request).ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
+            null,
+            null);
+        Console.WriteLine(results);
     }
 
     private static async Task CloneProjects(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
