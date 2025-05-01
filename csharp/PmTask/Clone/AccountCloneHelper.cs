@@ -79,31 +79,19 @@ public class AccountCloneHelper
             });
         Console.WriteLine(results);
 
-        var projectCount = srcProjects.Data.Length;
-        var progressCount = 0;
+        // Sync Project Members
+        /*
+        Console.Write($"Cloning project members for {srcProjects.Data.Length} projects... ");
         foreach (var srcProject in srcProjects.Data)
         {
-            progressCount++;
-            var srcProjectId = srcProject.Id!.Value;
-            var destProjectId = map.MapKeyGuid("Project", srcProjectId) ?? Guid.Empty;
-
-            if (destProjectId == Guid.Empty)
-            {
-                Console.WriteLine($"No destination project found for {srcProject.Name}");
-                continue;
-            }
-
-            //// Project Members
             //var srcProjectMembers = await src.ProjectMembers.RetrieveProjectMembers(srcProjectId, false).ThrowOnError("Fetching from source");
             //var destProjectMembers = await dest.ProjectMembers.RetrieveProjectMembers(destProjectId!, false).ThrowOnError("Fetching from destination");
-            //Console.Write($"Cloning {srcProjectMembers.Data.Length} project members for project [{progressCount}/{projectCount}]... ");
 
             // Because Resources have been created without an email address, they cannot have any other Role assigned to them except the default None role.
             // Resources with the None role are only present in the Resources table, not in the BusinessUsers table. The problem we have here is that when we
             // try and assign the Guest role/permission to a Resource, it tries to write an entry in the ProjectAccess table, which throws a foreign key error
             //      The INSERT statement conflicted with the FOREIGN KEY constraint "FK_ProjectAccess_aspnet_Users".
             //      The conflict occurred in database "pmproject", table "dbo.BusinessUser", column 'UserId'.
-            /*
             results = await SyncHelper.SyncData("ProjectMember", srcProjectMembers.Data, destProjectMembers.Data, map,
                 m => m.Name,
                 m => m.Id!.Value.ToString(),
@@ -140,13 +128,33 @@ public class AccountCloneHelper
                     await dest.ProjectMembers.RemoveUserProjectMembership(destProjectId, m.Id!.Value).ThrowOnError("Removing");
                 }
             );
-            Console.WriteLine(results);
-            */
+
+            createCount += results.Creates;
+            updateCount += results.Updates;
+            deleteCount += results.Deletes;
+        }
+        Console.WriteLine(SyncHelper.GetResult(createCount, updateCount, deleteCount));
+        */
+
+        // Sync Project Field Values
+        var createCount = 0;
+        var updateCount = 0;
+        var deleteCount = 0;
+        Console.Write($"Cloning project field values for {srcProjects.Data.Length} projects... ");
+        foreach (var srcProject in srcProjects.Data)
+        {
+            var srcProjectId = srcProject.Id!.Value;
+            var destProjectId = map.MapKeyGuid("Project", srcProjectId) ?? Guid.Empty;
+
+            if (destProjectId == Guid.Empty)
+            {
+                Console.WriteLine($"No destination project found for {srcProject.Name}");
+                continue;
+            }
 
             // Project Field Values
             var srcProjectFieldValues = await src.ProjectField.RetrieveAllProjectFieldValues(srcProjectId);
             var destProjectFieldValues = await dest.ProjectField.RetrieveAllProjectFieldValues(destProjectId);
-            Console.Write($"Cloning {srcProjectFieldValues.Data.Length} project field values for project [{progressCount}/{projectCount}]... ");
 
             results = await SyncHelper.SyncData("ProjectFieldValue", srcProjectFieldValues.Data, destProjectFieldValues.Data, map,
                 v => $"{srcProject.Name} - {v.Name}",
@@ -186,12 +194,32 @@ public class AccountCloneHelper
                     await dest.ProjectField.UpdateProjectFieldValue(destProjectId, v.Id!.ToString(), uv).ThrowOnError("Clearing");
                 }
             );
-            Console.WriteLine(results);
+
+            createCount += results.Creates;
+            updateCount += results.Updates;
+            deleteCount += results.Deletes;
+        }
+        Console.WriteLine(SyncHelper.GetResult(createCount, updateCount, deleteCount));
+
+        // Sync Project Task Statuses
+        createCount = 0;
+        updateCount = 0;
+        deleteCount = 0;
+        Console.Write($"Cloning task statuses for {srcProjects.Data.Length} projects... ");
+        foreach (var srcProject in srcProjects.Data)
+        {
+            var srcProjectId = srcProject.Id!.Value;
+            var destProjectId = map.MapKeyGuid("Project", srcProjectId) ?? Guid.Empty;
+
+            if (destProjectId == Guid.Empty)
+            {
+                Console.WriteLine($"No destination project found for {srcProject.Name}");
+                continue;
+            }
 
             // Task Status
             var srcTaskStatus = await src.TaskStatus.RetrieveTaskStatuses(srcProjectId);
             var destTaskStatus = await dest.TaskStatus.RetrieveTaskStatuses(destProjectId);
-            Console.Write($"Cloning {srcTaskStatus.Data.Length} task statuses for project [{progressCount}/{projectCount}]... ");
 
             results = await SyncHelper.SyncData("TaskStatus", srcTaskStatus.Data, destTaskStatus.Data, map,
                 s => $"{srcProject.Name} - {s.Name}",
@@ -226,8 +254,12 @@ public class AccountCloneHelper
                     await dest.TaskStatus.DeleteTaskStatus(destProjectId, v.Id!.Value).ThrowOnError("Deleting");
                 }
             );
-            Console.WriteLine(results);
+
+            createCount += results.Creates;
+            updateCount += results.Updates;
+            deleteCount += results.Deletes;
         }
+        Console.WriteLine(SyncHelper.GetResult(createCount, updateCount, deleteCount));
 
         // Task ToDo
         //var taskToDos = await src.TaskTodo.GetTodos(taskId);
