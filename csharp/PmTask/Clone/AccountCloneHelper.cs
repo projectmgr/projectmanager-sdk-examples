@@ -229,8 +229,6 @@ public class AccountCloneHelper
             Console.WriteLine(results);
         }
 
-        // Task Tag
-        //var taskTags = await src.TaskTag.ReplaceTaskTags(taskId);
         // Task ToDo
         //var taskToDos = await src.TaskTodo.GetTodos(taskId);
     }
@@ -478,7 +476,7 @@ public class AccountCloneHelper
         // going to do it manually after all tasks have been synced.
         var summarySrcTasks = filteredSrcTasks.Where(t => t.IsSummary ?? false).ToList();
         Console.Write($"Indenting Tasks for {summarySrcTasks.Count} Summary tasks... ");
-        var changeCount = 0; ;
+        var changeCount = 0;
         foreach (var srcParentTask in summarySrcTasks)
         {
             var destParentTaskId = map.MapKeyGuid("Task", srcParentTask.Id) ?? Guid.Empty;
@@ -516,7 +514,53 @@ public class AccountCloneHelper
                 changeCount++;
             }
         }
-        Console.WriteLine(changeCount == 0 ? "No changes." : $"Updated {changeCount}.");
+        Console.WriteLine(SyncHelper.GetResult(0, changeCount, 0));
+
+        // Sync TaskTags
+        // We can loop through the source Tasks and sync up any Tags that are assigned to them.
+        Console.Write($"Cloning TaskTags for {filteredSrcTasks.Count} tasks... ");
+        var removedTagCount = 0;
+        var addedTagCount = 0;
+        foreach (var srcTask in filteredSrcTasks)
+        {
+            // Note: DestTask may not exist if it was a newly created task
+            var destTaskId = map.MapKeyGuid("Task", srcTask.Id) ?? Guid.Empty;
+            var destTask = destTasks.Data.FirstOrDefault(t => t.Id == destTaskId);
+
+            if (srcTask.Tags == null || srcTask.Tags.Length == 0)
+            {
+                // Possibly need to remove Tags on destTask
+                if (destTask == null || destTask.Tags.Length == 0)
+                {
+                    // DestTask does not exist, or there are no tags to remove
+                    continue;
+                }
+
+                //  Remove all tags from the destination task
+                var removeTags = destTask.Tags.Select(t => new NameDto { Name = t.Name }).ToArray();
+                await dest.TaskTag.RemoveTaskTagFromTask(destTaskId, removeTags).ThrowOnError("Removing");
+                removedTagCount += removeTags.Length;
+            }
+            else
+            {
+                // Source task has tags - if there are any that are not on the destination task,
+                // then we replace all tags on the destination task.
+                foreach (var srcTag in srcTask.Tags)
+                {
+                    // If destTask does not exist, then it is a new task, and we need to add Tags
+                    if (destTask == null || destTask.Tags.All(t => t.Name != srcTag.Name))
+                    {
+                        var replaceTags = srcTask.Tags.Select(t => new NameDto { Name = t.Name }).ToArray();
+                        // Check if all source tags exist on the 
+                        await dest.TaskTag.ReplaceTaskTags(destTaskId, replaceTags).ThrowOnError("Creating");
+                        addedTagCount += replaceTags.Length;
+
+                        break; // No need to check other tags
+                    }
+                }
+            }
+        }
+        Console.WriteLine(SyncHelper.GetResult(addedTagCount, 0, removedTagCount));
     }
 
     private static async Task CloneResourceTeams(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
@@ -692,14 +736,7 @@ public class AccountCloneHelper
                 };
                 await dest.TaskField.UpdateTaskFieldValue(dv.Task.Id!.Value, dv.Id!.Value, uv).ThrowOnError("Updating");
             },
-            async v =>
-            {
-                var uv = new UpdateTaskFieldValueDto
-                {
-                    Value = string.Empty
-                };
-                await dest.TaskField.UpdateTaskFieldValue(v.Task.Id!.Value, v.Id!.Value, uv).ThrowOnError("Clearing");
-            }
+            null // no deletes available for task field values - update functions as a delete
         );
         Console.WriteLine(results);
     }

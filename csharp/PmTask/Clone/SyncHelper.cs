@@ -13,28 +13,33 @@ public class SyncHelper
 
         public override string ToString()
         {
-            if (Creates + Updates + Deletes == 0)
-            {
-                return "No changes.";
-            }
-            var sb = new StringBuilder();
-            if (Creates > 0)
-            {
-                sb.Append($"Created {Creates}, ");
-            }
-            if (Updates > 0)
-            {
-                sb.Append($"Updated {Updates}, ");
-            }
-            if (Deletes > 0)
-            {
-                sb.Append($"Deleted {Deletes}, ");
-            }
-
-            sb.Length -= 2;
-            sb.Append(".");
-            return sb.ToString();
+            return GetResult(Creates, Updates, Deletes);
         }
+    }
+
+    public static string GetResult(int creates, int updates, int deletes)
+    {
+        if (creates + updates + deletes == 0)
+        {
+            return "No changes.";
+        }
+        var sb = new StringBuilder();
+        if (creates > 0)
+        {
+            sb.Append($"Created {creates}, ");
+        }
+        if (updates > 0)
+        {
+            sb.Append($"Updated {updates}, ");
+        }
+        if (deletes > 0)
+        {
+            sb.Append($"Deleted {deletes}, ");
+        }
+
+        sb.Length -= 2;
+        sb.Append(".");
+        return sb.ToString();
     }
     
     /// <summary>
