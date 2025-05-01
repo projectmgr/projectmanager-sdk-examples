@@ -21,6 +21,7 @@ public class AccountCloneHelper
         await CloneProjects(src, dest, map);
         await CloneTaskFields(src, dest, map);
         await CloneTasks(src, dest, map);
+        await CloneTaskFieldValues(src, dest, map);
         await CloneTimesheets(src, dest, map);
     }
 
@@ -626,27 +627,80 @@ public class AccountCloneHelper
             tf => tf.Name,
             tf => tf.Id!.Value.ToString(),
             (tf1, tf2) => tf1.Name == tf2.Name
-                               && tf1.Options == tf2.Options
-                               && tf1.Type == tf2.Type
-                               && tf1.ShortId == tf2.ShortId,
-                async tf =>
+                          && tf1.Options == tf2.Options
+                          && tf1.Type == tf2.Type
+                          && tf1.ShortId == tf2.ShortId,
+            async tf =>
+            {
+                var ntf = new CreateTaskFieldDto
                 {
-                    var ntf = new CreateTaskFieldDto
-                    {
-                        Name = tf.Name,
-                        Type = tf.Type,
-                        Options = tf.Options,
-                        ShortId = tf.ShortId
-                    };
-                    var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
-                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
-                    return result.Data.Id!.Value.ToString();
-                },
+                    Name = tf.Name,
+                    Type = tf.Type,
+                    Options = tf.Options,
+                    ShortId = tf.ShortId
+                };
+                var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
+                var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
+                return result.Data.Id!.Value.ToString();
+            },
             null, // no updates available for project fields 
             async tf =>
             {
                 await dest.TaskField.DeleteTaskField(tf.Project.Id!.Value, tf.Id!.Value).ThrowOnError("Deleting");
             });
+        Console.WriteLine(results);
+    }
+
+    private static async Task CloneTaskFieldValues(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
+    {
+        // Task Field Values
+        var srcTaskFieldValues = await src.TaskField.QueryTaskFieldValues();
+        var destTaskFieldValues = await dest.TaskField.QueryTaskFieldValues();
+        Console.Write($"Cloning {srcTaskFieldValues.Data.Length} task field values... ");
+
+        var results = await SyncHelper.SyncData("TaskFieldValue", srcTaskFieldValues.Data, destTaskFieldValues.Data, map,
+            v => $"{v.Task.Name} - {v.Name}",
+            v => v.Id!.Value.ToString(),
+            (v1, v2) => v1.ShortId == v2.ShortId
+                        && v1.Name == v2.Name
+                        && v1.Type == v2.Type
+                        && v1.Value == v2.Value,
+            async v =>
+            {
+                var nv = new UpdateTaskFieldValueDto
+                {
+                    Value = v.Value
+                };
+                var destTaskId = map.MapKeyGuid("Task", v.Task.Id) ?? Guid.Empty;
+                if (destTaskId == Guid.Empty)
+                {
+                    throw new Exception($"No destination task found for {v.Task.Name}");
+                }
+                var destFieldId = map.MapKeyGuid("TaskField", v.Id) ?? Guid.Empty;
+                if (destFieldId == Guid.Empty)
+                {
+                    throw new Exception($"No destination task field found for {v.Name}");
+                }
+                await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv).ThrowOnError("Creating");
+                return destFieldId.ToString();
+            },
+            async (sv, dv) =>
+            {
+                var uv = new UpdateTaskFieldValueDto
+                {
+                    Value = sv.Value
+                };
+                await dest.TaskField.UpdateTaskFieldValue(dv.Task.Id!.Value, dv.Id!.Value, uv).ThrowOnError("Updating");
+            },
+            async v =>
+            {
+                var uv = new UpdateTaskFieldValueDto
+                {
+                    Value = string.Empty
+                };
+                await dest.TaskField.UpdateTaskFieldValue(v.Task.Id!.Value, v.Id!.Value, uv).ThrowOnError("Clearing");
+            }
+        );
         Console.WriteLine(results);
     }
 
