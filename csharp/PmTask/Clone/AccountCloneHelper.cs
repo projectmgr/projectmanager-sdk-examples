@@ -1,4 +1,4 @@
-using ProjectManager.SDK;
+﻿using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
@@ -534,11 +534,19 @@ public class AccountCloneHelper
                     continue;
                 }
 
+                // Check if the destination Child Task has the same WBS as the source Child Task.
+                // Then we do not have to indent it.
+                var destChildTask = destTasks.Data.FirstOrDefault(t => t.Id == destChildTaskId);
+                if (destChildTask != null && destChildTask.Wbs == srcChildTask.Wbs)
+                {
+                    continue;
+                }
+
                 await dest.Task.AddParentTask(destChildTaskId, destParentTaskId).ThrowOnError("Adding parent task");
                 changeCount++;
             }
         }
-        Console.WriteLine($"Updated {changeCount}.");
+        Console.WriteLine(changeCount == 0 ? "No changes." : $"Updated {changeCount}.");
     }
 
     private static async Task CloneResourceTeams(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
