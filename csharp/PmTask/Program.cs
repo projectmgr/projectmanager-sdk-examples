@@ -207,6 +207,14 @@ public static class Program
             return;
         }
         
+        // The destination account WILL BE COMPLETELY ERASED - let's ensure that this is valid
+        if (!destMe.Data.WorkSpaceName.StartsWith("Cloned"))
+        {
+            Console.WriteLine($"The account {destMe.Data.WorkSpaceName} is not a cloned account.");
+            Console.WriteLine("To use the account cloning feature, the workspace name must begin with the word \"Cloned\".");
+            return;
+        }
+        
         // This does all the work
         await AccountCloneHelper.CloneAccount(src, dest);
     }
