@@ -1,4 +1,4 @@
-﻿using ProjectManager.SDK;
+using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
@@ -502,6 +502,43 @@ public class AccountCloneHelper
             }
         );
         Console.WriteLine(results);
+
+        // Indenting/Parent Tasks
+        // Not sure if we want to implement this logic with SyncHelper.SyncData, but for now we're
+        // going to do it manually after all tasks have been synced.
+        var summarySrcTasks = filteredSrcTasks.Where(t => t.IsSummary ?? false).ToList();
+        Console.Write($"Indenting Tasks for {summarySrcTasks.Count} Summary tasks... ");
+        var changeCount = 0; ;
+        foreach (var srcParentTask in summarySrcTasks)
+        {
+            var destParentTaskId = map.MapKeyGuid("Task", srcParentTask.Id) ?? Guid.Empty;
+            if (destParentTaskId == Guid.Empty)
+            {
+                Console.WriteLine($"No destination task found for {srcParentTask.Name}");
+                continue;
+            }
+
+            var srcChildTasks = filteredSrcTasks.Where(t => t.Wbs.StartsWith($"{srcParentTask.Wbs}.")).ToList();
+
+            // Ensure childTasks are sorted in reverse order of their WBS numbers as child items are
+            // added directly under parent tasks - reverse order leaves the original order after indenting.
+            srcChildTasks.Sort(new WbsSortHelper());
+            srcChildTasks.Reverse();
+
+            foreach (var srcChildTask in srcChildTasks)
+            {
+                var destChildTaskId = map.MapKeyGuid("Task", srcChildTask.Id) ?? Guid.Empty;
+                if (destChildTaskId == Guid.Empty)
+                {
+                    Console.WriteLine($"No destination task found for {srcChildTask.Name}");
+                    continue;
+                }
+
+                await dest.Task.AddParentTask(destChildTaskId, destParentTaskId).ThrowOnError("Adding parent task");
+                changeCount++;
+            }
+        }
+        Console.WriteLine($"Updated {changeCount}.");
     }
 
     private static async Task CloneResourceTeams(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
