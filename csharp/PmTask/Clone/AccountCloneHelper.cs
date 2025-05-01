@@ -1,4 +1,5 @@
-﻿using ProjectManager.SDK;
+﻿using CSVFile;
+using ProjectManager.SDK;
 using ProjectManager.SDK.Models;
 
 namespace PmTask.Clone;
@@ -23,6 +24,11 @@ public class AccountCloneHelper
         await CloneTasks(src, dest, map);
         await CloneTaskFieldValues(src, dest, map);
         await CloneTimesheets(src, dest, map);
+        
+        // Now output the mapping as a CSV
+        var csvMap = CSV.Serialize(map.Items);
+        await File.WriteAllTextAsync("output.csv", csvMap);
+        Console.WriteLine("GUID mapping written to output.csv");
     }
 
     private static async Task CloneTimesheets(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
