@@ -445,22 +445,22 @@ public class AccountCloneHelper
             t => t.Name,
             t => t.Id!.Value.ToString(),
             (t1, t2) => // Compare all fields that we actually can set with Create or Update
-                        t1.Name == t2.Name
-                        && (t1.Description ?? string.Empty) == (t2.Description ?? string.Empty)
-                        && t1.Status?.Name == t2.Status?.Name
-                        && t1.PlannedStartDate == t2.PlannedStartDate
-                        && t1.PlannedFinishDate == t2.PlannedFinishDate
-                        && t1.ActualStartDate == t2.ActualStartDate
-                        && t1.ActualFinishDate == t2.ActualFinishDate
-                        && t1.PercentComplete == t2.PercentComplete
-                        && t1.IsLocked == t2.IsLocked
-                        && t1.IsMilestone == t2.IsMilestone
-                        && t1.PriorityId == t2.PriorityId
-                        && t1.Theme == t2.Theme
-                        && (t1.ActualCost ?? 0M) == (t2.ActualCost ?? 0M)
-                        && (t1.PlannedCost ?? 0M) == (t2.PlannedCost ?? 0M)
-                        && t1.PlannedDuration == t2.PlannedDuration
-                        && (t1.PlannedEffort ?? 0) == (t2.PlannedEffort ?? 0),
+                t1.Name == t2.Name
+                && (t1.Description ?? string.Empty) == (t2.Description ?? string.Empty)
+                && t1.Status?.Name == t2.Status?.Name
+                && t1.PlannedStartDate == t2.PlannedStartDate
+                && t1.PlannedFinishDate == t2.PlannedFinishDate
+                && t1.ActualStartDate == t2.ActualStartDate
+                && t1.ActualFinishDate == t2.ActualFinishDate
+                && t1.PercentComplete == t2.PercentComplete
+                && t1.IsLocked == t2.IsLocked
+                && t1.IsMilestone == t2.IsMilestone
+                && t1.PriorityId == t2.PriorityId
+                && t1.Theme == t2.Theme
+                && (t1.ActualCost ?? 0M) == (t2.ActualCost ?? 0M)
+                && (t1.PlannedCost ?? 0M) == (t2.PlannedCost ?? 0M)
+                && t1.PlannedDuration == t2.PlannedDuration
+                && (t1.PlannedEffort ?? 0) == (t2.PlannedEffort ?? 0),
             async t =>
             {
                 var nAssignees = new List<Guid>();
@@ -563,7 +563,8 @@ public class AccountCloneHelper
                 continue;
             }
 
-            var srcChildTasks = filteredSrcTasks.Where(t => t.Wbs.StartsWith($"{srcParentTask.Wbs}.")).ToList();
+            // From all Filtered Source Tasks, grab the child tasks for the Parent Tasks Project
+            var srcChildTasks = filteredSrcTasks.Where(t => t.ProjectId == srcParentTask.ProjectId && t.Wbs.StartsWith($"{srcParentTask.Wbs}.")).ToList();
 
             // Ensure childTasks are sorted in reverse order of their WBS numbers as child items are
             // added directly under parent tasks - reverse order leaves the original order after indenting.
