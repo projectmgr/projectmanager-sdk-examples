@@ -24,7 +24,7 @@ public class AccountCloneHelper
         await CloneTasks(src, dest, map);
         await CloneTaskFieldValues(src, dest, map);
         await CloneTimesheets(src, dest, map);
-        
+
         // Now output the mapping as a CSV
         var csvMap = CSV.Serialize(map.Items);
         await File.WriteAllTextAsync("output.csv", csvMap);
@@ -40,14 +40,15 @@ public class AccountCloneHelper
         Console.Write($"Cloning {srcTimesheets.Data.Length} timesheets...");
 
         var results = await SyncHelper.SyncData("Timesheet", srcTimesheets.Data, destTimesheets.Data, map,
-            t =>
-                $"{t.Date} {t.Resource?.FirstName} {t.Resource?.LastName} {t.Project?.Name} {t.Task?.Name} {t.AdminType?.Name}",
+            // Note: We need to ensure that this identity string is lowercase as there may be some resources with differing cases in their names
+            // The API will adjust all First and Last names to be capitalized, so we need to ensure that we are comparing the lower case.
+            t => $"{t.Date} {t.Resource?.FirstName} {t.Resource?.LastName} {t.Project?.Name} {t.Task?.Name} {t.AdminType?.Name}".ToLowerInvariant(),
             t => t.Id!.Value.ToString(),
             (t1, t2) => t1.Date == t2.Date
-                        && t1.Hours == t2.Hours
-                        && t1.Minutes == t2.Minutes
-                        // Can't set "approved" status here, so can't compare on it
-                        && t1.Notes == t2.Notes,
+                       && t1.Hours == t2.Hours
+                       && t1.Minutes == t2.Minutes
+                       // Can't set "approved" status here, so can't compare on it
+                       && t1.Notes == t2.Notes,
             async t =>
             {
                 var request = new TimesheetCreateRequestDto()
@@ -64,8 +65,23 @@ public class AccountCloneHelper
                 var result = await dest.Timesheet.CreateTimeEntry(request).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            null,
-            null);
+            async (st, dt) =>
+            {
+                // There may be an issue around Date - if the date is different, then we should be
+                // deleting and creating instead of updating
+                var ut = new TimesheetUpdateRequestDto
+                {
+                    Hours = st.Hours,
+                    Minutes = st.Minutes,
+                    Notes = st.Notes
+                };
+                await dest.Timesheet.UpdateTimeEntry(dt.Id!.Value, ut).ThrowOnError("Updating");
+            },
+            async t =>
+            {
+                await dest.Timesheet.DeleteTimeEntry(t.Id!.Value).ThrowOnError("Deleting");
+            }
+        );
         Console.WriteLine(results);
     }
 
@@ -261,8 +277,8 @@ public class AccountCloneHelper
                 s => s.Id!.Value.ToString(),
                 (s1, s2) => s1.Name == s2.Name
                             && s1.Order == s2.Order,
-                            // Currently, there is no way to create/update the IsDone property via the API - value is always false
-                            //&& s1.IsDone == s2.IsDone,
+                // Currently, there is no way to create/update the IsDone property via the API - value is always false
+                //&& s1.IsDone == s2.IsDone,
                 async s =>
                 {
                     var ns = new TaskStatusCreateDto
@@ -307,38 +323,32 @@ public class AccountCloneHelper
         Console.Write($"Cloning {srcResources.Data.Length} resources... ");
 
         // Special handling for resources: We aren't creating them with email addresses, because that would create
-        // users and link them to the test account.  Because of this, we eliminate first and last names, and only sync
-        // on email addresses.  But when migrating data, all email addresses are moved to last names.
+        // users and link them to the test account.  
         foreach (var item in srcResources.Data)
         {
             if (!string.IsNullOrWhiteSpace(item.Email))
             {
-                item.FirstName = "Cloned";
-                item.LastName = item.Email.Replace('@', '_');
                 item.Email = string.Empty;
             }
         }
-        var filteredDestResources = destResources.Data.Where(r => String.IsNullOrWhiteSpace(r.Email)).ToArray();
+        var filteredDestResources = destResources.Data.Where(r => string.IsNullOrWhiteSpace(r.Email)).ToArray();
 
         var results = await SyncHelper.SyncData("Resource", srcResources.Data, filteredDestResources, map,
             r => $"{r.FirstName} {r.LastName}".ToLowerInvariant(),
             r => r.Id!.Value.ToString(),
-            (r1, r2) =>
-            {
-                return r1.Color == r2.Color
-                       && String.Equals(r1.FirstName, r2.FirstName, StringComparison.InvariantCultureIgnoreCase)
-                       && String.Equals(r1.LastName, r2.LastName, StringComparison.InvariantCultureIgnoreCase)
-                       && r1.AvatarUrl == r2.AvatarUrl
-                       && r1.City == r2.City
-                       && r1.ColorName == r2.ColorName
-                       && r1.Country == r2.Country
-                       && r1.CountryName == r2.CountryName
-                       && r1.HourlyRate == r2.HourlyRate
-                       && r1.IsActive == r2.IsActive
-                       && r1.Notes == r2.Notes
-                       && r1.Phone == r2.Phone
-                       && r1.State == r2.State;
-            },
+            (r1, r2) => r1.Color == r2.Color
+                        && string.Equals(r1.FirstName, r2.FirstName, StringComparison.InvariantCultureIgnoreCase)
+                        && string.Equals(r1.LastName, r2.LastName, StringComparison.InvariantCultureIgnoreCase)
+                        && r1.AvatarUrl == r2.AvatarUrl
+                        && r1.City == r2.City
+                        && r1.ColorName == r2.ColorName
+                        && r1.Country == r2.Country
+                        && r1.CountryName == r2.CountryName
+                        && r1.HourlyRate == r2.HourlyRate
+                        && r1.IsActive == r2.IsActive
+                        && r1.Notes == r2.Notes
+                        && r1.Phone == r2.Phone
+                        && r1.State == r2.State,
             async r =>
             {
                 var teams = r.Teams
@@ -682,7 +692,7 @@ public class AccountCloneHelper
             },
             async (srcSkill, destSkill) =>
             {
-                var result = await dest.ResourceSkill
+                await dest.ResourceSkill
                     .UpdateResourceSkill(destSkill.Id!.Value, new UpdateResourceSkillDto() { Name = srcSkill.Name })
                     .ThrowOnError("Updating");
             },
