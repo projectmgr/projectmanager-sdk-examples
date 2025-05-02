@@ -609,6 +609,10 @@ public class AccountCloneHelper
         var changeCount = 0;
         foreach (var srcParentTask in summarySrcTasks)
         {
+            if (srcParentTask == null)
+            {
+                continue;
+            }
             var destParentTaskId = map.MapKeyGuid("Task", srcParentTask.Id) ?? Guid.Empty;
             if (destParentTaskId == Guid.Empty)
             {
@@ -617,7 +621,9 @@ public class AccountCloneHelper
             }
 
             // From all Filtered Source Tasks, grab the child tasks for the Parent Tasks Project
-            var srcChildTasks = filteredSrcTasks.Where(t => t.ProjectId == srcParentTask.ProjectId && t.Wbs.StartsWith($"{srcParentTask.Wbs}.")).ToList();
+            var srcChildTasks = filteredSrcTasks
+                .Where(t => t.ProjectId == srcParentTask.ProjectId && IsWbsChild(srcParentTask.Wbs, t.Wbs))
+                .ToList();
 
             // Ensure childTasks are sorted in reverse order of their WBS numbers as child items are
             // added directly under parent tasks - reverse order leaves the original order after indenting.
@@ -701,6 +707,15 @@ public class AccountCloneHelper
             }
         }
         Console.WriteLine(SyncHelper.GetResult(addedTagCount, 0, removedTagCount));
+    }
+
+    private static bool IsWbsChild(string? parentWbs, string? childWbs)
+    {
+        if (parentWbs == null || childWbs == null)
+        {
+            return false;
+        }
+        return childWbs.StartsWith($"{parentWbs}.");
     }
 
     private static async Task CloneResourceTeams(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
