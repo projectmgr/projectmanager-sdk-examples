@@ -807,7 +807,7 @@ public class AccountCloneHelper
             tf => tf.Name,
             tf => tf.Id!.Value.ToString(),
             (tf1, tf2) => tf1.Name == tf2.Name
-                          && tf1.Options == tf2.Options
+                          && Enumerable.SequenceEqual(tf1.Options, tf2.Options)
                           && tf1.Type == tf2.Type
                           && tf1.ShortId == tf2.ShortId,
             async tf =>
