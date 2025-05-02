@@ -511,6 +511,10 @@ public class AccountCloneHelper
                 && (t1.PlannedEffort ?? 0) == (t2.PlannedEffort ?? 0),
             async t =>
             {
+                if (String.IsNullOrWhiteSpace(t.Name))
+                {
+                    return Guid.Empty.ToString();
+                }
                 var nAssignees = new List<Guid>();
                 foreach (var tAssignee in t.Assignees)
                 {
