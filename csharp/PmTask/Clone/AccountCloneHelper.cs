@@ -125,7 +125,8 @@ public class AccountCloneHelper
                        && p1.Customer?.Name == p2.Customer?.Name
                        && p1.Status.Name == p2.Status?.Name
                        && p1.Priority.Name == p2.Priority.Name
-                       && p1.StatusUpdate == p2.StatusUpdate;
+                       // && p1.StatusUpdate == p2.StatusUpdate - In testing, Acumatica integrations caused these to be updated often
+                       ;
                 return match;
             },
             async p =>
@@ -382,17 +383,18 @@ public class AccountCloneHelper
         var results = await SyncHelper.SyncData("Resource", srcResources.Data, filteredDestResources, map,
             r => $"{r.FirstName} {r.LastName}".ToLowerInvariant(),
             r => r.Id!.Value.ToString(),
-            (r1, r2) => r1.Color == r2.Color
-                        && string.Equals(r1.FirstName, r2.FirstName, StringComparison.InvariantCultureIgnoreCase)
-                        && string.Equals(r1.LastName, r2.LastName, StringComparison.InvariantCultureIgnoreCase)
-                        && r1.AvatarUrl == r2.AvatarUrl
+            (r1, r2) => 
+                        // r1.Color == r2.Color && - Color cannot be updated, so don't compare against it
+                        string.Equals(r1.FirstName ?? "", r2.FirstName ?? "", StringComparison.InvariantCultureIgnoreCase)
+                        && string.Equals(r1.LastName ?? "", r2.LastName ?? "", StringComparison.InvariantCultureIgnoreCase)
+                        // && r1.AvatarUrl == r2.AvatarUrl - Avatar images don't get cloned since these can be uploads
                         && r1.City == r2.City
-                        && r1.ColorName == r2.ColorName
+                        // && r1.ColorName == r2.ColorName - Color cannot be updated, so don't compare against it
                         && r1.Country == r2.Country
                         && r1.CountryName == r2.CountryName
                         && r1.HourlyRate == r2.HourlyRate
                         && r1.IsActive == r2.IsActive
-                        && r1.Notes == r2.Notes
+                        // && r1.Notes == r2.Notes - Sometimes small differences in notes, don't compare against it
                         && r1.Phone == r2.Phone
                         && r1.State == r2.State,
             async r =>
@@ -775,7 +777,7 @@ public class AccountCloneHelper
             (srcPf, destPf) =>
             {
                 return srcPf.Name == destPf.Name
-                       && srcPf.Options == destPf.Options
+                       && Enumerable.SequenceEqual(srcPf.Options, destPf.Options)
                        && srcPf.Type == destPf.Type
                        && srcPf.ShortId == destPf.ShortId;
             },
