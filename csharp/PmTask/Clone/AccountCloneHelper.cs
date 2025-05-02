@@ -87,23 +87,32 @@ public class AccountCloneHelper
 
     private static async Task CloneProjects(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
+        // For each project created, we must add the live users to that project as members.
+        // var activeUsers = await src.Resource.QueryResources(null, null, "email ne '' and email ne null")
+        //     .ThrowOnError("Fetching live resources");
+        
         var srcProjects = await src.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from source");
-        var destProjects = await dest.Project.QueryProjects().ThrowOnError("Fetching from destination");
+        var destProjects = await dest.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcProjects.Data.Length} projects... ");
 
         var results = await SyncHelper.SyncData("Project", srcProjects.Data, destProjects.Data, map,
             p => p.Name,
             p => p.Id!.Value.ToString(),
-            (p1, p2) => p1.Name == p2.Name
-                        && p1.HourlyRate == p2.HourlyRate
-                        && p1.Budget == p2.Budget
-                        && p1.Description == p2.Description
-                        && p1.Folder?.Name == p2.Folder?.Name
-                        && p1.ChargeCode?.Name == p2.ChargeCode?.Name
-                        && p1.Customer?.Name == p2.Customer?.Name
-                        && p1.Status.Name == p2.Status?.Name
-                        && p1.Priority.Name == p2.Priority.Name
-                        && p1.StatusUpdate == p2.StatusUpdate,
+            (p1, p2) =>
+            {
+                
+                var match = p1.Name == p2.Name
+                       && p1.HourlyRate == p2.HourlyRate
+                       && p1.Budget == p2.Budget
+                       && p1.Description == p2.Description
+                       && p1.Folder?.Name == p2.Folder?.Name
+                       //&& p1.ChargeCode?.Name == p2.ChargeCode?.Name - ChargeCodes can't be cloned yet
+                       && p1.Customer?.Name == p2.Customer?.Name
+                       && p1.Status.Name == p2.Status?.Name
+                       && p1.Priority.Name == p2.Priority.Name
+                       && p1.StatusUpdate == p2.StatusUpdate;
+                return match;
+            },
             async p =>
             {
                 var np = new ProjectCreateDto
@@ -114,16 +123,33 @@ public class AccountCloneHelper
                     Budget = p.Budget,
                     StatusUpdate = p.StatusUpdate,
                     FolderId = map.MapKeyGuid("ProjectFolder", p.Folder?.Id),
-                    ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode?.Id),
-                    ManagerId = map.MapKeyGuid("Resource", p.Manager?.Id),
+                    // ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode?.Id), - ChargeCodes can't be cloned yet
+                    // ManagerId = map.MapKeyGuid("Resource", p.Manager?.Id), - Managers can't be cloned yet
                     CustomerId = map.MapKeyGuid("ProjectCustomer", p.Customer?.Id),
                     StatusId = map.MapKeyGuid("ProjectStatus", p.Status.Id),
                     PriorityId = map.MapKeyGuid("ProjectPriority", p.Priority.Id),
+                    // This is the cloned account, just give everyone access
+                    ProjectAccess = new ProjectCreateAccessDto() { Everyone = true }
                 };
                 var result = await dest.Project.CreateProject(np).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            null,
+            async (srcProj, destProj) =>
+            {
+                var update = new ProjectUpdateDto()
+                {
+                    Description = srcProj.Description,
+                    HourlyRate = srcProj.HourlyRate,
+                    Budget = srcProj.Budget,
+                    StatusUpdate = srcProj.StatusUpdate,
+                    FolderId = map.MapKeyGuid("ProjectFolder", srcProj.Folder?.Id),
+                    // ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", srcProj.ChargeCode?.Id), - Charge Codes can't be cloned yet
+                    //ManagerId = map.MapKeyGuid("Resource", srcProj.Manager?.Id), - Managers can't be cloned yet
+                    StatusId = map.MapKeyGuid("ProjectStatus", srcProj.Status?.Id),
+                    PriorityId = map.MapKeyGuid("ProjectPriority", srcProj.Priority.Id),
+                };
+                await dest.Project.UpdateProject(destProj.Id!.Value, update).ThrowOnError("Updating");
+            },
             async p =>
             {
                 await dest.Project.DeleteProject(p.Id!.Value, true).ThrowOnError("Deleting");
@@ -216,16 +242,21 @@ public class AccountCloneHelper
                             && v1.Value == v2.Value,
                 async v =>
                 {
-                    var nv = new UpdateProjectFieldValueDto
-                    {
-                        Value = v.Value
-                    };
                     var destFieldId = map.MapKeyGuid("ProjectField", v.Id) ?? Guid.Empty;
-                    if (destFieldId == Guid.Empty)
+                    if (!string.IsNullOrWhiteSpace(v.Value))
                     {
-                        throw new Exception($"No destination project field found for {v.Name}");
+                        var nv = new UpdateProjectFieldValueDto
+                        {
+                            Value = v.Value
+                        };
+                        if (destFieldId == Guid.Empty)
+                        {
+                            throw new Exception($"No destination project field found for {v.Name}");
+                        }
+
+                        await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv)
+                            .ThrowOnError("Creating");
                     }
-                    await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv).ThrowOnError("Creating");
                     return destFieldId.ToString();
                 },
                 async (sv, dv) =>
@@ -726,11 +757,11 @@ public class AccountCloneHelper
             async pf =>
             {
                 var result = await dest.ProjectField.CreateProjectField(new ProjectFieldCreateDto()
-                { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
+                        { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
                     .ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            null, // no updates available for project fields 
+            (pf1, pf2) => Task.CompletedTask, // no updates available for project fields
             async pf =>
             {
                 await dest.ProjectField.DeleteProjectField(pf.Id!.Value.ToString()).ThrowOnError("Deleting");
@@ -762,10 +793,15 @@ public class AccountCloneHelper
                     ShortId = tf.ShortId
                 };
                 var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
-                var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
-                return result.Data.Id!.Value.ToString();
+                if (destProjectId != Guid.Empty)
+                {
+                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
+                    return result.Data.Id!.Value.ToString();
+                }
+
+                return Guid.Empty.ToString();
             },
-            null, // no updates available for project fields 
+            (f1, f2) => Task.CompletedTask, // no updates available for project fields - ignore them 
             async tf =>
             {
                 await dest.TaskField.DeleteTaskField(tf.Project.Id!.Value, tf.Id!.Value).ThrowOnError("Deleting");
