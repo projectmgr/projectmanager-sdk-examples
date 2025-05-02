@@ -537,7 +537,7 @@ public class AccountCloneHelper
                     Theme = t.Theme,
                     IsLocked = t.IsLocked,
                     IsMilestone = t.IsMilestone,
-                    StatusId = map.MapKeyGuid("TaskStatus", t.Status.Id),
+                    StatusId = map.MapKeyGuid("TaskStatus", t.Status?.Id ?? Guid.Empty),
                     Assignees = nAssignees.ToArray()
 
                 };
@@ -819,11 +819,22 @@ public class AccountCloneHelper
                     Options = tf.Options,
                     ShortId = tf.ShortId
                 };
+                if (ntf.Type == "dropdown")
+                {
+                    ntf.Type = "dropdown-single";
+                }
                 var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
                 if (destProjectId != Guid.Empty)
                 {
-                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
-                    return result.Data.Id!.Value.ToString();
+                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf);
+                    if (result.Success)
+                    {
+                        return result.Data.Id!.Value.ToString();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Unable to create task field");
+                    }
                 }
 
                 return Guid.Empty.ToString();
