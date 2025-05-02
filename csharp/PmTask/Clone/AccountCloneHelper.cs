@@ -51,6 +51,10 @@ public class AccountCloneHelper
                        && t1.Notes == t2.Notes,
             async t =>
             {
+                if (t.TaskId == Guid.Empty)
+                {
+                    return Guid.Empty.ToString();
+                }
                 var request = new TimesheetCreateRequestDto()
                 {
                     ResourceId = map.MapKeyGuid("Resource", t.ResourceId),
