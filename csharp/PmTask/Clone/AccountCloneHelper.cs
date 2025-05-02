@@ -503,7 +503,7 @@ public class AccountCloneHelper
                 && t1.PercentComplete == t2.PercentComplete
                 && t1.IsLocked == t2.IsLocked
                 && t1.IsMilestone == t2.IsMilestone
-                && t1.PriorityId == t2.PriorityId
+                // && t1.PriorityId == t2.PriorityId - Priority IDs don't always automatch
                 && t1.Theme == t2.Theme
                 && (t1.ActualCost ?? 0M) == (t2.ActualCost ?? 0M)
                 && (t1.PlannedCost ?? 0M) == (t2.PlannedCost ?? 0M)
