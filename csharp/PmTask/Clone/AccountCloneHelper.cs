@@ -66,8 +66,19 @@ public class AccountCloneHelper
                     Notes = t.Notes,
                     // Can't set "approved" status here
                 };
-                var result = await dest.Timesheet.CreateTimeEntry(request).ThrowOnError("Creating");
-                return result.Data.Id!.Value.ToString();
+                if (request.TaskId == null && request.AdminTypeId == null)
+                {
+                    return Guid.Empty.ToString();
+                }
+                var result = await dest.Timesheet.CreateTimeEntry(request);
+                if (result.Success)
+                {
+                    return result.Data.Id!.Value.ToString();
+                }
+                else
+                {
+                    return Guid.Empty.ToString();
+                }
             },
             async (st, dt) =>
             {
