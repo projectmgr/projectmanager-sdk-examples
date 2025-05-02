@@ -53,7 +53,7 @@ public class SyncHelper
         Func<T, string> identityFunc, 
         Func<T, string> primaryKeyFunc,
         Func<T, T, bool> compareFunc,
-        Func<T, Task<string>> createFunc, 
+        Func<T, Task<string?>> createFunc, 
         Func<T, T, Task>? updateFunc, 
         Func<T, Task>? deleteFunc)
     {
@@ -75,7 +75,7 @@ public class SyncHelper
             if (destMap.TryGetValue(identityString, out var matchingItem))
             {
                 // If the objects are identical, no changes need to be made
-                string newPrimaryKey = primaryKeyFunc(matchingItem);
+                string? newPrimaryKey = primaryKeyFunc(matchingItem);
                 if (compareFunc(item, matchingItem))
                 {
                     keysToDelete.Remove(primaryKeyFunc(matchingItem));
@@ -96,25 +96,32 @@ public class SyncHelper
                         results.Creates++;
                     }
                 }
-                map.Items.Add(new AccountMap.AccountMapItem()
+
+                if (newPrimaryKey != null)
                 {
-                    Category = category,
-                    Identity = identityString,
-                    OriginalPrimaryKey = primaryKeyString,
-                    NewPrimaryKey = newPrimaryKey,
-                });
+                    map.Items.Add(new AccountMap.AccountMapItem()
+                    {
+                        Category = category,
+                        Identity = identityString,
+                        OriginalPrimaryKey = primaryKeyString,
+                        NewPrimaryKey = newPrimaryKey,
+                    });
+                }
             }
             else
             {
                 var newPrimaryKey = await createFunc(item);
-                results.Creates++;
-                map.Items.Add(new AccountMap.AccountMapItem()
+                if (newPrimaryKey != null)
                 {
-                    Category = category, 
-                    Identity = identityString, 
-                    OriginalPrimaryKey = primaryKeyString,
-                    NewPrimaryKey = newPrimaryKey,
-                });
+                    results.Creates++;
+                    map.Items.Add(new AccountMap.AccountMapItem()
+                    {
+                        Category = category,
+                        Identity = identityString,
+                        OriginalPrimaryKey = primaryKeyString,
+                        NewPrimaryKey = newPrimaryKey,
+                    });
+                }
             }
         }
         

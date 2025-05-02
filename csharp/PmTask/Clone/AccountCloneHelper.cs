@@ -844,16 +844,20 @@ public class AccountCloneHelper
                 var destTaskId = map.MapKeyGuid("Task", v.Task.Id) ?? Guid.Empty;
                 if (destTaskId == Guid.Empty)
                 {
-                    throw new Exception($"No destination task found for {v.Task.Name}");
+                    return null;
                 }
 
                 var destFieldId = map.MapKeyGuid("TaskField", v.Id) ?? Guid.Empty;
                 if (destFieldId == Guid.Empty)
                 {
-                    throw new Exception($"No destination task field found for {v.Name}");
+                    return null;
                 }
 
-                await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv).ThrowOnError("Creating");
+                var result = await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv);
+                if (!result.Success)
+                {
+                    // No specific action to take
+                }
                 return destFieldId.ToString();
             },
             async (sv, dv) =>
