@@ -844,11 +844,15 @@ public class AccountCloneHelper
             },
             async (sv, dv) =>
             {
-                var uv = new UpdateTaskFieldValueDto
+                if (!string.IsNullOrWhiteSpace(sv.Value))
                 {
-                    Value = sv.Value
-                };
-                await dest.TaskField.UpdateTaskFieldValue(dv.Task.Id!.Value, dv.Id!.Value, uv).ThrowOnError("Updating");
+                    var uv = new UpdateTaskFieldValueDto
+                    {
+                        Value = sv.Value
+                    };
+                    await dest.TaskField.UpdateTaskFieldValue(dv.Task.Id!.Value, dv.Id!.Value, uv)
+                        .ThrowOnError("Updating");
+                }
             },
             null // no deletes available for task field values - update functions as a delete
         );
