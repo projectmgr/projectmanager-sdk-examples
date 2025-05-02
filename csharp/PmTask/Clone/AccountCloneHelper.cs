@@ -478,7 +478,7 @@ public class AccountCloneHelper
             (t1, t2) => // Compare all fields that we actually can set with Create or Update
                 t1.Name == t2.Name
                 && (t1.Description ?? string.Empty) == (t2.Description ?? string.Empty)
-                && t1.Status?.Name == t2.Status?.Name
+                // && t1.Status?.Name == t2.Status?.Name - Cloning task status has workflow issues
                 && t1.PlannedStartDate == t2.PlannedStartDate
                 && t1.PlannedFinishDate == t2.PlannedFinishDate
                 && t1.ActualStartDate == t2.ActualStartDate
@@ -534,44 +534,44 @@ public class AccountCloneHelper
                 var result = await dest.Task.CreateTask(destProjectId, nt).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            async (st, dt) =>
-            {
-                var ut = new TaskUpdateDto
-                {
-                    Name = st.Name,
-                    Description = st.Description,
-                    PercentComplete = st.PercentComplete,
-                    PriorityId = st.PriorityId,
-                    PlannedEffort = st.PlannedEffort,
-                    PlannedCost = st.PlannedCost,
-                    ActualStartDate = st.ActualStartDate,
-                    ActualFinishDate = st.ActualFinishDate,
-                    ActualCost = st.ActualCost,
-                    Theme = st.Theme,
-                    IsLocked = st.IsLocked,
-                    IsMilestone = st.IsMilestone,
-                    StatusId = map.MapKeyGuid("TaskStatus", st.Status.Id),
-                };
-                // Cannot update all Planned data at the same time - so only update if different
-                var updatePlannedCount = 0;
-                if (st.PlannedStartDate != dt.PlannedStartDate)
-                {
-                    ut.PlannedStartDate = st.PlannedStartDate;
-                    updatePlannedCount++;
-                }
-                if (st.PlannedFinishDate != dt.PlannedFinishDate)
-                {
-                    ut.PlannedFinishDate = st.PlannedFinishDate;
-                    updatePlannedCount++;
-                }
-                // Don't set Duration if we have set both Start and Finish dates (even if it is different)
-                if (st.PlannedDuration != dt.PlannedDuration && updatePlannedCount != 2)
-                {
-                    ut.PlannedDuration = st.PlannedDuration;
-                }
-
-                await dest.Task.UpdateTask(dt.Id!.Value, ut).ThrowOnError("Updating");
-            },
+            (st, dt) => Task.CompletedTask,
+            // {
+            //     var ut = new TaskUpdateDto
+            //     {
+            //         Name = st.Name,
+            //         Description = st.Description,
+            //         PercentComplete = st.PercentComplete,
+            //         PriorityId = st.PriorityId,
+            //         PlannedEffort = st.PlannedEffort,
+            //         PlannedCost = st.PlannedCost,
+            //         ActualStartDate = st.ActualStartDate,
+            //         ActualFinishDate = st.ActualFinishDate,
+            //         ActualCost = st.ActualCost,
+            //         Theme = st.Theme,
+            //         IsLocked = st.IsLocked,
+            //         IsMilestone = st.IsMilestone,
+            //         // StatusId = map.MapKeyGuid("TaskStatus", st.Status.Id), - Updating TaskStatus can cause workflow errors
+            //     };
+            //     // Cannot update all Planned data at the same time - so only update if different
+            //     var updatePlannedCount = 0;
+            //     if (st.PlannedStartDate != dt.PlannedStartDate)
+            //     {
+            //         ut.PlannedStartDate = st.PlannedStartDate;
+            //         updatePlannedCount++;
+            //     }
+            //     if (st.PlannedFinishDate != dt.PlannedFinishDate)
+            //     {
+            //         ut.PlannedFinishDate = st.PlannedFinishDate;
+            //         updatePlannedCount++;
+            //     }
+            //     // Don't set Duration if we have set both Start and Finish dates (even if it is different)
+            //     if (st.PlannedDuration != dt.PlannedDuration && updatePlannedCount != 2)
+            //     {
+            //         ut.PlannedDuration = st.PlannedDuration;
+            //     }
+            //
+            //     await dest.Task.UpdateTask(dt.Id!.Value, ut).ThrowOnError("Updating");
+            // },
             async t =>
             {
                 await dest.Task.DeleteTask(t.Id!.Value).ThrowOnError("Deleting");
