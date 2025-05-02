@@ -26,7 +26,7 @@ public class AccountCloneHelper
         await CloneTimesheets(src, dest, map);
 
         // Now output the mapping as a CSV
-        var csvMap = CSV.Serialize(map.Items);
+        var csvMap = CSV.Serialize(map.GetItems());
         await File.WriteAllTextAsync("output.csv", csvMap);
         Console.WriteLine("GUID mapping written to output.csv");
     }
