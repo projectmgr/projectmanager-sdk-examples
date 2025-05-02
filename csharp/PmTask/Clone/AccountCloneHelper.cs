@@ -51,6 +51,10 @@ public class AccountCloneHelper
                        && t1.Notes == t2.Notes,
             async t =>
             {
+                if (t.TaskId == Guid.Empty)
+                {
+                    return Guid.Empty.ToString();
+                }
                 var request = new TimesheetCreateRequestDto()
                 {
                     ResourceId = map.MapKeyGuid("Resource", t.ResourceId),
@@ -62,8 +66,19 @@ public class AccountCloneHelper
                     Notes = t.Notes,
                     // Can't set "approved" status here
                 };
-                var result = await dest.Timesheet.CreateTimeEntry(request).ThrowOnError("Creating");
-                return result.Data.Id!.Value.ToString();
+                if (request.TaskId == null && request.AdminTypeId == null)
+                {
+                    return Guid.Empty.ToString();
+                }
+                var result = await dest.Timesheet.CreateTimeEntry(request);
+                if (result.Success)
+                {
+                    return result.Data.Id!.Value.ToString();
+                }
+                else
+                {
+                    return Guid.Empty.ToString();
+                }
             },
             async (st, dt) =>
             {
@@ -87,23 +102,32 @@ public class AccountCloneHelper
 
     private static async Task CloneProjects(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
+        // For each project created, we must add the live users to that project as members.
+        // var activeUsers = await src.Resource.QueryResources(null, null, "email ne '' and email ne null")
+        //     .ThrowOnError("Fetching live resources");
+        
         var srcProjects = await src.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from source");
-        var destProjects = await dest.Project.QueryProjects().ThrowOnError("Fetching from destination");
+        var destProjects = await dest.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcProjects.Data.Length} projects... ");
 
         var results = await SyncHelper.SyncData("Project", srcProjects.Data, destProjects.Data, map,
             p => p.Name,
             p => p.Id!.Value.ToString(),
-            (p1, p2) => p1.Name == p2.Name
-                        && p1.HourlyRate == p2.HourlyRate
-                        && p1.Budget == p2.Budget
-                        && p1.Description == p2.Description
-                        && p1.Folder?.Name == p2.Folder?.Name
-                        && p1.ChargeCode?.Name == p2.ChargeCode?.Name
-                        && p1.Customer?.Name == p2.Customer?.Name
-                        && p1.Status.Name == p2.Status?.Name
-                        && p1.Priority.Name == p2.Priority.Name
-                        && p1.StatusUpdate == p2.StatusUpdate,
+            (p1, p2) =>
+            {
+                
+                var match = p1.Name == p2.Name
+                       && p1.HourlyRate == p2.HourlyRate
+                       && p1.Budget == p2.Budget
+                       && p1.Description == p2.Description
+                       && p1.Folder?.Name == p2.Folder?.Name
+                       //&& p1.ChargeCode?.Name == p2.ChargeCode?.Name - ChargeCodes can't be cloned yet
+                       && p1.Customer?.Name == p2.Customer?.Name
+                       && p1.Status.Name == p2.Status?.Name
+                       && p1.Priority.Name == p2.Priority.Name
+                       && p1.StatusUpdate == p2.StatusUpdate;
+                return match;
+            },
             async p =>
             {
                 var np = new ProjectCreateDto
@@ -114,16 +138,33 @@ public class AccountCloneHelper
                     Budget = p.Budget,
                     StatusUpdate = p.StatusUpdate,
                     FolderId = map.MapKeyGuid("ProjectFolder", p.Folder?.Id),
-                    ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode?.Id),
-                    ManagerId = map.MapKeyGuid("Resource", p.Manager?.Id),
+                    // ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", p.ChargeCode?.Id), - ChargeCodes can't be cloned yet
+                    // ManagerId = map.MapKeyGuid("Resource", p.Manager?.Id), - Managers can't be cloned yet
                     CustomerId = map.MapKeyGuid("ProjectCustomer", p.Customer?.Id),
                     StatusId = map.MapKeyGuid("ProjectStatus", p.Status.Id),
                     PriorityId = map.MapKeyGuid("ProjectPriority", p.Priority.Id),
+                    // This is the cloned account, just give everyone access
+                    ProjectAccess = new ProjectCreateAccessDto() { Everyone = true }
                 };
                 var result = await dest.Project.CreateProject(np).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            null,
+            async (srcProj, destProj) =>
+            {
+                var update = new ProjectUpdateDto()
+                {
+                    Description = srcProj.Description,
+                    HourlyRate = srcProj.HourlyRate,
+                    Budget = srcProj.Budget,
+                    StatusUpdate = srcProj.StatusUpdate,
+                    FolderId = map.MapKeyGuid("ProjectFolder", srcProj.Folder?.Id),
+                    // ChargeCodeId = map.MapKeyGuid("ProjectChargeCode", srcProj.ChargeCode?.Id), - Charge Codes can't be cloned yet
+                    //ManagerId = map.MapKeyGuid("Resource", srcProj.Manager?.Id), - Managers can't be cloned yet
+                    StatusId = map.MapKeyGuid("ProjectStatus", srcProj.Status?.Id),
+                    PriorityId = map.MapKeyGuid("ProjectPriority", srcProj.Priority.Id),
+                };
+                await dest.Project.UpdateProject(destProj.Id!.Value, update).ThrowOnError("Updating");
+            },
             async p =>
             {
                 await dest.Project.DeleteProject(p.Id!.Value, true).ThrowOnError("Deleting");
@@ -216,16 +257,21 @@ public class AccountCloneHelper
                             && v1.Value == v2.Value,
                 async v =>
                 {
-                    var nv = new UpdateProjectFieldValueDto
-                    {
-                        Value = v.Value
-                    };
                     var destFieldId = map.MapKeyGuid("ProjectField", v.Id) ?? Guid.Empty;
-                    if (destFieldId == Guid.Empty)
+                    if (!string.IsNullOrWhiteSpace(v.Value))
                     {
-                        throw new Exception($"No destination project field found for {v.Name}");
+                        var nv = new UpdateProjectFieldValueDto
+                        {
+                            Value = v.Value
+                        };
+                        if (destFieldId == Guid.Empty)
+                        {
+                            throw new Exception($"No destination project field found for {v.Name}");
+                        }
+
+                        await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv)
+                            .ThrowOnError("Creating");
                     }
-                    await dest.ProjectField.UpdateProjectFieldValue(destProjectId, destFieldId.ToString(), nv).ThrowOnError("Creating");
                     return destFieldId.ToString();
                 },
                 async (sv, dv) =>
@@ -447,7 +493,7 @@ public class AccountCloneHelper
             (t1, t2) => // Compare all fields that we actually can set with Create or Update
                 t1.Name == t2.Name
                 && (t1.Description ?? string.Empty) == (t2.Description ?? string.Empty)
-                && t1.Status?.Name == t2.Status?.Name
+                // && t1.Status?.Name == t2.Status?.Name - Cloning task status has workflow issues
                 && t1.PlannedStartDate == t2.PlannedStartDate
                 && t1.PlannedFinishDate == t2.PlannedFinishDate
                 && t1.ActualStartDate == t2.ActualStartDate
@@ -503,47 +549,48 @@ public class AccountCloneHelper
                 var result = await dest.Task.CreateTask(destProjectId, nt).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            async (st, dt) =>
-            {
-                var ut = new TaskUpdateDto
-                {
-                    Name = st.Name,
-                    Description = st.Description,
-                    PercentComplete = st.PercentComplete,
-                    PriorityId = st.PriorityId,
-                    PlannedEffort = st.PlannedEffort,
-                    PlannedCost = st.PlannedCost,
-                    ActualStartDate = st.ActualStartDate,
-                    ActualFinishDate = st.ActualFinishDate,
-                    ActualCost = st.ActualCost,
-                    Theme = st.Theme,
-                    IsLocked = st.IsLocked,
-                    IsMilestone = st.IsMilestone,
-                    StatusId = map.MapKeyGuid("TaskStatus", st.Status.Id),
-                };
-                // Cannot update all Planned data at the same time - so only update if different
-                var updatePlannedCount = 0;
-                if (st.PlannedStartDate != dt.PlannedStartDate)
-                {
-                    ut.PlannedStartDate = st.PlannedStartDate;
-                    updatePlannedCount++;
-                }
-                if (st.PlannedFinishDate != dt.PlannedFinishDate)
-                {
-                    ut.PlannedFinishDate = st.PlannedFinishDate;
-                    updatePlannedCount++;
-                }
-                // Don't set Duration if we have set both Start and Finish dates (even if it is different)
-                if (st.PlannedDuration != dt.PlannedDuration && updatePlannedCount != 2)
-                {
-                    ut.PlannedDuration = st.PlannedDuration;
-                }
-
-                await dest.Task.UpdateTask(dt.Id!.Value, ut).ThrowOnError("Updating");
-            },
+            (st, dt) => Task.CompletedTask,
+            // {
+            //     var ut = new TaskUpdateDto
+            //     {
+            //         Name = st.Name,
+            //         Description = st.Description,
+            //         PercentComplete = st.PercentComplete,
+            //         PriorityId = st.PriorityId,
+            //         PlannedEffort = st.PlannedEffort,
+            //         PlannedCost = st.PlannedCost,
+            //         ActualStartDate = st.ActualStartDate,
+            //         ActualFinishDate = st.ActualFinishDate,
+            //         ActualCost = st.ActualCost,
+            //         Theme = st.Theme,
+            //         IsLocked = st.IsLocked,
+            //         IsMilestone = st.IsMilestone,
+            //         // StatusId = map.MapKeyGuid("TaskStatus", st.Status.Id), - Updating TaskStatus can cause workflow errors
+            //     };
+            //     // Cannot update all Planned data at the same time - so only update if different
+            //     var updatePlannedCount = 0;
+            //     if (st.PlannedStartDate != dt.PlannedStartDate)
+            //     {
+            //         ut.PlannedStartDate = st.PlannedStartDate;
+            //         updatePlannedCount++;
+            //     }
+            //     if (st.PlannedFinishDate != dt.PlannedFinishDate)
+            //     {
+            //         ut.PlannedFinishDate = st.PlannedFinishDate;
+            //         updatePlannedCount++;
+            //     }
+            //     // Don't set Duration if we have set both Start and Finish dates (even if it is different)
+            //     if (st.PlannedDuration != dt.PlannedDuration && updatePlannedCount != 2)
+            //     {
+            //         ut.PlannedDuration = st.PlannedDuration;
+            //     }
+            //
+            //     await dest.Task.UpdateTask(dt.Id!.Value, ut).ThrowOnError("Updating");
+            // },
             async t =>
             {
-                await dest.Task.DeleteTask(t.Id!.Value).ThrowOnError("Deleting");
+                await dest.Task.DeleteTask(t.Id!.Value);
+                    //.ThrowOnError("Deleting"); - There's a workflow error in deleting a task when
             }
         );
         Console.WriteLine(results);
@@ -588,7 +635,16 @@ public class AccountCloneHelper
                     continue;
                 }
 
-                await dest.Task.AddParentTask(destChildTaskId, destParentTaskId).ThrowOnError("Adding parent task");
+                if (destParentTaskId == destChildTaskId)
+                {
+                    continue;
+                }
+
+                var result = await dest.Task.AddParentTask(destChildTaskId, destParentTaskId);
+                if (!result.Success)
+                {
+                    continue;
+                }
                 changeCount++;
             }
         }
@@ -726,11 +782,11 @@ public class AccountCloneHelper
             async pf =>
             {
                 var result = await dest.ProjectField.CreateProjectField(new ProjectFieldCreateDto()
-                { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
+                        { Name = pf.Name, Options = pf.Options, ShortId = pf.ShortId, Type = pf.Type })
                     .ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
-            null, // no updates available for project fields 
+            (pf1, pf2) => Task.CompletedTask, // no updates available for project fields
             async pf =>
             {
                 await dest.ProjectField.DeleteProjectField(pf.Id!.Value.ToString()).ThrowOnError("Deleting");
@@ -762,10 +818,15 @@ public class AccountCloneHelper
                     ShortId = tf.ShortId
                 };
                 var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
-                var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
-                return result.Data.Id!.Value.ToString();
+                if (destProjectId != Guid.Empty)
+                {
+                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
+                    return result.Data.Id!.Value.ToString();
+                }
+
+                return Guid.Empty.ToString();
             },
-            null, // no updates available for project fields 
+            (f1, f2) => Task.CompletedTask, // no updates available for project fields - ignore them 
             async tf =>
             {
                 await dest.TaskField.DeleteTaskField(tf.Project.Id!.Value, tf.Id!.Value).ThrowOnError("Deleting");
@@ -776,8 +837,10 @@ public class AccountCloneHelper
     private static async Task CloneTaskFieldValues(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         // Task Field Values
-        var srcTaskFieldValues = await src.TaskField.QueryTaskFieldValues();
-        var destTaskFieldValues = await dest.TaskField.QueryTaskFieldValues();
+        var srcTaskFieldValues = await src.TaskField.QueryTaskFieldValues(null, null, "value ne '' and value ne null")
+            .ThrowOnError("Fetching from source");
+        var destTaskFieldValues = await dest.TaskField.QueryTaskFieldValues(null, null, "value ne '' and value ne null")
+            .ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcTaskFieldValues.Data.Length} task field values... ");
 
         var results = await SyncHelper.SyncData("TaskFieldValue", srcTaskFieldValues.Data, destTaskFieldValues.Data, map,
@@ -796,23 +859,33 @@ public class AccountCloneHelper
                 var destTaskId = map.MapKeyGuid("Task", v.Task.Id) ?? Guid.Empty;
                 if (destTaskId == Guid.Empty)
                 {
-                    throw new Exception($"No destination task found for {v.Task.Name}");
+                    return null;
                 }
+
                 var destFieldId = map.MapKeyGuid("TaskField", v.Id) ?? Guid.Empty;
                 if (destFieldId == Guid.Empty)
                 {
-                    throw new Exception($"No destination task field found for {v.Name}");
+                    return null;
                 }
-                await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv).ThrowOnError("Creating");
+
+                var result = await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv);
+                if (!result.Success)
+                {
+                    // No specific action to take
+                }
                 return destFieldId.ToString();
             },
             async (sv, dv) =>
             {
-                var uv = new UpdateTaskFieldValueDto
+                if (!string.IsNullOrWhiteSpace(sv.Value))
                 {
-                    Value = sv.Value
-                };
-                await dest.TaskField.UpdateTaskFieldValue(dv.Task.Id!.Value, dv.Id!.Value, uv).ThrowOnError("Updating");
+                    var uv = new UpdateTaskFieldValueDto
+                    {
+                        Value = sv.Value
+                    };
+                    await dest.TaskField.UpdateTaskFieldValue(dv.Task.Id!.Value, dv.Id!.Value, uv)
+                        .ThrowOnError("Updating");
+                }
             },
             null // no deletes available for task field values - update functions as a delete
         );

@@ -214,6 +214,7 @@ public static class Program
             Console.WriteLine("To use the account cloning feature, the workspace name must begin with the word \"Cloned\".");
             return;
         }
+        Console.WriteLine($"Copying into account {destMe.Data.WorkSpaceName} as {destMe.Data.EmailAddress}.");
         
         // This does all the work
         await AccountCloneHelper.CloneAccount(src, dest);
