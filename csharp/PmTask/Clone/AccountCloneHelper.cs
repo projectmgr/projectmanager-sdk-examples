@@ -574,7 +574,8 @@ public class AccountCloneHelper
             // },
             async t =>
             {
-                await dest.Task.DeleteTask(t.Id!.Value).ThrowOnError("Deleting");
+                await dest.Task.DeleteTask(t.Id!.Value);
+                    //.ThrowOnError("Deleting"); - There's a workflow error in deleting a task when
             }
         );
         Console.WriteLine(results);
@@ -619,7 +620,16 @@ public class AccountCloneHelper
                     continue;
                 }
 
-                await dest.Task.AddParentTask(destChildTaskId, destParentTaskId).ThrowOnError("Adding parent task");
+                if (destParentTaskId == destChildTaskId)
+                {
+                    continue;
+                }
+
+                var result = await dest.Task.AddParentTask(destChildTaskId, destParentTaskId);
+                if (!result.Success)
+                {
+                    continue;
+                }
                 changeCount++;
             }
         }
@@ -812,8 +822,10 @@ public class AccountCloneHelper
     private static async Task CloneTaskFieldValues(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         // Task Field Values
-        var srcTaskFieldValues = await src.TaskField.QueryTaskFieldValues();
-        var destTaskFieldValues = await dest.TaskField.QueryTaskFieldValues();
+        var srcTaskFieldValues = await src.TaskField.QueryTaskFieldValues(null, null, "value ne '' and value ne null")
+            .ThrowOnError("Fetching from source");
+        var destTaskFieldValues = await dest.TaskField.QueryTaskFieldValues(null, null, "value ne '' and value ne null")
+            .ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcTaskFieldValues.Data.Length} task field values... ");
 
         var results = await SyncHelper.SyncData("TaskFieldValue", srcTaskFieldValues.Data, destTaskFieldValues.Data, map,
@@ -834,11 +846,13 @@ public class AccountCloneHelper
                 {
                     throw new Exception($"No destination task found for {v.Task.Name}");
                 }
+
                 var destFieldId = map.MapKeyGuid("TaskField", v.Id) ?? Guid.Empty;
                 if (destFieldId == Guid.Empty)
                 {
                     throw new Exception($"No destination task field found for {v.Name}");
                 }
+
                 await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv).ThrowOnError("Creating");
                 return destFieldId.ToString();
             },
