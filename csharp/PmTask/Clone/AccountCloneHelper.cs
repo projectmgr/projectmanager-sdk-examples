@@ -108,11 +108,15 @@ public class AccountCloneHelper
         //     .ThrowOnError("Fetching live resources");
         
         var srcProjects = await src.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from source");
+        foreach (var p in srcProjects.Data)
+        {
+            p.Description = AddGuidTo(p.Description, p.Id!.Value);
+        }
         var destProjects = await dest.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcProjects.Data.Length} projects... ");
 
         var results = await SyncHelper.SyncData("Project", srcProjects.Data, destProjects.Data, map,
-            p => p.Name,
+            p => GetGuidFrom(p.Description),
             p => p.Id!.Value.ToString(),
             (p1, p2) =>
             {
@@ -364,6 +368,21 @@ public class AccountCloneHelper
         //var taskToDos = await src.TaskTodo.GetTodos(taskId);
     }
 
+    private static string GetGuidFrom(string? text)
+    {
+        if (text != null && text.Length > 36 && Guid.TryParse(text[^36..], out var guid))
+        {
+            return guid.ToString().ToLowerInvariant();
+        }
+
+        return Guid.Empty.ToString();
+    }
+
+    private static string AddGuidTo(string text, Guid guid)
+    {
+        return $"{text}{(string.IsNullOrEmpty(text) ? "" :Environment.NewLine)}Source GUID: {guid.ToString().ToLowerInvariant()}";
+    }
+
     private static async Task CloneResources(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         var srcResources = await src.Resource.QueryResources(null, null, "isActive eq true").ThrowOnError("Fetching from source");
@@ -478,6 +497,10 @@ public class AccountCloneHelper
     private static async Task CloneTasks(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         var srcTasks = await src.Task.QueryTasks().ThrowOnError("Fetching from source");
+        foreach (var t in srcTasks.Data)
+        {
+            t.Description = AddGuidTo(t.Description, t.Id!.Value);
+        }
         var destTasks = await dest.Task.QueryTasks().ThrowOnError("Fetching from destination");
 
         // Source Tasks also include tasks from Deleted Projects, which we are not mapping. Filter
@@ -491,7 +514,7 @@ public class AccountCloneHelper
         filteredSrcTasks.Sort(new WbsSortHelper());
 
         var results = await SyncHelper.SyncData("Task", filteredSrcTasks.ToArray(), destTasks.Data, map,
-            t => t.Name,
+            t => GetGuidFrom(t.Description),
             t => t.Id!.Value.ToString(),
             (t1, t2) => // Compare all fields that we actually can set with Create or Update
                 t1.Name == t2.Name
