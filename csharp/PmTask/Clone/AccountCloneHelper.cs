@@ -26,7 +26,8 @@ public class AccountCloneHelper
         await CloneTimesheets(src, dest, map);
 
         // Now output the mapping as a CSV
-        var csvMap = CSV.Serialize(map.GetItems());
+        var items = map.GetItems().ToList();
+        var csvMap = CSV.Serialize(items);
         await File.WriteAllTextAsync("output.csv", csvMap);
         Console.WriteLine("GUID mapping written to output.csv");
     }
@@ -619,7 +620,7 @@ public class AccountCloneHelper
                 Console.WriteLine($"No destination task found for {srcParentTask.Name}");
                 continue;
             }
-
+            
             // From all Filtered Source Tasks, grab the child tasks for the Parent Tasks Project
             var srcChildTasks = filteredSrcTasks
                 .Where(t => t.ProjectId == srcParentTask.ProjectId && IsWbsChild(srcParentTask.Wbs, t.Wbs))

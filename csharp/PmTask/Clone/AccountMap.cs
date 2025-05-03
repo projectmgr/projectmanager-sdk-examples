@@ -42,7 +42,7 @@ public class AccountMap
         return null;
     }
 
-    public IEnumerable<object> GetItems()
+    public List<AccountMapItem> GetItems()
     {
         return Items;
     }
