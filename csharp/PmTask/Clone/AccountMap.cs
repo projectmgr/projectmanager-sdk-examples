@@ -8,31 +8,30 @@ public class AccountMap
         public string Identity { get; set; }
         public string OriginalPrimaryKey { get; set; }
         public string NewPrimaryKey { get; set; }
-    }
 
-    public List<AccountMapItem> Items { get; set; } = new();
-
-    public string MapKey(string category, string key)
-    {
-        var match = Items.FirstOrDefault(i => i.Category == category && i.OriginalPrimaryKey == key);
-        if (match != null)
+        public string GetKey()
         {
-            return match.NewPrimaryKey;
+            return $"{Category}:{OriginalPrimaryKey}";
         }
-
-        throw new Exception($"No match found for {category} key {key}");
     }
-    
+
+    private List<AccountMapItem> Items { get; set; } = new();
+    private Dictionary<string, AccountMapItem> Dict { get; set; } = new();
+
+    public void AddItem(AccountMapItem item)
+    {
+        Items.Add(item);
+        Dict[item.GetKey()] = item;
+    }
+
     public Guid? MapKeyGuid(string category, Guid? key)
     {
         if (key == null)
         {
             return null;
         }
-        
-        var guidString = key.ToString();
-        var match = Items.FirstOrDefault(i => i.Category == category && i.OriginalPrimaryKey == guidString);
-        if (match != null)
+
+        if (Dict.TryGetValue($"{category}:{key}", out var match))
         {
             if (Guid.TryParse(match.NewPrimaryKey, out var newGuid))
             {
@@ -41,5 +40,10 @@ public class AccountMap
         }
 
         return null;
+    }
+
+    public List<AccountMapItem> GetItems()
+    {
+        return Items;
     }
 }

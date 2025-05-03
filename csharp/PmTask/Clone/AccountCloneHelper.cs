@@ -26,7 +26,8 @@ public class AccountCloneHelper
         await CloneTimesheets(src, dest, map);
 
         // Now output the mapping as a CSV
-        var csvMap = CSV.Serialize(map.Items);
+        var items = map.GetItems().ToList();
+        var csvMap = CSV.Serialize(items);
         await File.WriteAllTextAsync("output.csv", csvMap);
         Console.WriteLine("GUID mapping written to output.csv");
     }
@@ -511,6 +512,10 @@ public class AccountCloneHelper
                 && (t1.PlannedEffort ?? 0) == (t2.PlannedEffort ?? 0),
             async t =>
             {
+                if (String.IsNullOrWhiteSpace(t.Name))
+                {
+                    return Guid.Empty.ToString();
+                }
                 var nAssignees = new List<Guid>();
                 foreach (var tAssignee in t.Assignees)
                 {
@@ -537,7 +542,7 @@ public class AccountCloneHelper
                     Theme = t.Theme,
                     IsLocked = t.IsLocked,
                     IsMilestone = t.IsMilestone,
-                    StatusId = map.MapKeyGuid("TaskStatus", t.Status.Id),
+                    StatusId = map.MapKeyGuid("TaskStatus", t.Status?.Id ?? Guid.Empty),
                     Assignees = nAssignees.ToArray()
 
                 };
@@ -605,15 +610,21 @@ public class AccountCloneHelper
         var changeCount = 0;
         foreach (var srcParentTask in summarySrcTasks)
         {
+            if (srcParentTask == null)
+            {
+                continue;
+            }
             var destParentTaskId = map.MapKeyGuid("Task", srcParentTask.Id) ?? Guid.Empty;
             if (destParentTaskId == Guid.Empty)
             {
                 Console.WriteLine($"No destination task found for {srcParentTask.Name}");
                 continue;
             }
-
+            
             // From all Filtered Source Tasks, grab the child tasks for the Parent Tasks Project
-            var srcChildTasks = filteredSrcTasks.Where(t => t.ProjectId == srcParentTask.ProjectId && t.Wbs.StartsWith($"{srcParentTask.Wbs}.")).ToList();
+            var srcChildTasks = filteredSrcTasks
+                .Where(t => t.ProjectId == srcParentTask.ProjectId && IsWbsChild(srcParentTask.Wbs, t.Wbs))
+                .ToList();
 
             // Ensure childTasks are sorted in reverse order of their WBS numbers as child items are
             // added directly under parent tasks - reverse order leaves the original order after indenting.
@@ -697,6 +708,15 @@ public class AccountCloneHelper
             }
         }
         Console.WriteLine(SyncHelper.GetResult(addedTagCount, 0, removedTagCount));
+    }
+
+    private static bool IsWbsChild(string? parentWbs, string? childWbs)
+    {
+        if (parentWbs == null || childWbs == null)
+        {
+            return false;
+        }
+        return childWbs.StartsWith($"{parentWbs}.");
     }
 
     private static async Task CloneResourceTeams(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
@@ -819,11 +839,22 @@ public class AccountCloneHelper
                     Options = tf.Options,
                     ShortId = tf.ShortId
                 };
+                if (ntf.Type == "dropdown")
+                {
+                    ntf.Type = "dropdown-single";
+                }
                 var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
                 if (destProjectId != Guid.Empty)
                 {
-                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf).ThrowOnError("Creating");
-                    return result.Data.Id!.Value.ToString();
+                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf);
+                    if (result.Success)
+                    {
+                        return result.Data.Id!.Value.ToString();
+                    }
+                    else
+                    {
+                        Console.WriteLine("Unable to create task field");
+                    }
                 }
 
                 return Guid.Empty.ToString();

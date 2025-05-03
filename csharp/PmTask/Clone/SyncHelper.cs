@@ -99,7 +99,7 @@ public class SyncHelper
 
                 if (newPrimaryKey != null)
                 {
-                    map.Items.Add(new AccountMap.AccountMapItem()
+                    map.AddItem(new AccountMap.AccountMapItem()
                     {
                         Category = category,
                         Identity = identityString,
@@ -114,7 +114,7 @@ public class SyncHelper
                 if (newPrimaryKey != null)
                 {
                     results.Creates++;
-                    map.Items.Add(new AccountMap.AccountMapItem()
+                    map.AddItem(new AccountMap.AccountMapItem()
                     {
                         Category = category,
                         Identity = identityString,
@@ -161,7 +161,7 @@ public class SyncHelper
             {
                 // If the objects are identical, no changes need to be made
                 string newPrimaryKey = primaryKeyFunc(matchingItem);
-                map.Items.Add(new AccountMap.AccountMapItem()
+                map.AddItem(new AccountMap.AccountMapItem()
                 {
                     Category = category,
                     Identity = identityString,
