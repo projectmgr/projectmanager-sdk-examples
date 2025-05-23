@@ -103,8 +103,8 @@ public class AccountCloneHelper
     private static async Task CloneProjects(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         // For each project created, we must add the live users to that project as members.
-        // var activeUsers = await src.Resource.QueryResources(null, null, "email ne '' and email ne null")
-        //     .ThrowOnError("Fetching live resources");
+        var activeDestUsers = await dest.Resource.QueryResources(null, null, "email ne '' and email ne null")
+            .ThrowOnError("Fetching live resources");
         
         var srcProjects = await src.Project.QueryProjects(null, null, "status/isDeleted eq false").ThrowOnError("Fetching from source");
         foreach (var p in srcProjects.Data)
@@ -152,6 +152,17 @@ public class AccountCloneHelper
                     ProjectAccess = new ProjectCreateAccessDto() { Everyone = true }
                 };
                 var result = await dest.Project.CreateProject(np).ThrowOnError("Creating");
+                
+                // Always grant access to the project for all users!
+                foreach (var resource in activeDestUsers.Data)
+                {
+                    var membershipResult = await dest.ProjectMembers.CreateUserProjectMembership(result.Data.Id!.Value, resource.Id!.Value,
+                            new ProjectMemberRoleDto() { Role = "Manager" });
+                    if (!membershipResult.Success && !membershipResult.Error.Message.Contains("user has access to project"))
+                    {
+                        Console.WriteLine($"Unable to create membership for {resource.FirstName} {resource.LastName} in project {np.Name}: {membershipResult.Error.Message}");
+                    }
+                }
                 return result.Data.Id!.Value.ToString();
             },
             async (srcProj, destProj) =>
@@ -169,6 +180,15 @@ public class AccountCloneHelper
                     PriorityId = map.MapKeyGuid("ProjectPriority", srcProj.Priority.Id),
                 };
                 await dest.Project.UpdateProject(destProj.Id!.Value, update).ThrowOnError("Updating");
+                foreach (var resource in activeDestUsers.Data)
+                {
+                    var membershipResult = await dest.ProjectMembers.CreateUserProjectMembership(destProj.Id!.Value, resource.Id!.Value,
+                        new ProjectMemberRoleDto() { Role = "Manager" });
+                    if (!membershipResult.Success && !membershipResult.Error.Message.Contains("user has access to project"))
+                    {
+                        Console.WriteLine($"Unable to create membership for {resource.FirstName} {resource.LastName} in project {destProj.Name}: {membershipResult.Error.Message}");
+                    }
+                }
             },
             async p =>
             {
