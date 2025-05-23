@@ -921,7 +921,7 @@ public class AccountCloneHelper
 
         var results = await SyncHelper.SyncData("TaskFieldValue", srcTaskFieldValues.Data, destTaskFieldValues.Data,
             map,
-            v => $"{v.Task.Name} - {v.Name}",
+            v => $"{map.MapKeyGuid("Task", v.Task.Id)} - {v.Name}",
             v => v.Id!.Value.ToString(),
             (v1, v2) => v1.ShortId == v2.ShortId
                         && v1.Name == v2.Name
