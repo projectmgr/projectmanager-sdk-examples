@@ -76,10 +76,9 @@ public class AccountCloneHelper
                 {
                     return result.Data.Id!.Value.ToString();
                 }
-                else
-                {
-                    return Guid.Empty.ToString();
-                }
+                
+                Console.WriteLine($"Unable to create Timesheet {t.Project.Name} - {t.Task.Name} - {t.Date}: {result.Error.Message}");
+                return Guid.Empty.ToString();
             },
             async (st, dt) =>
             {
@@ -679,6 +678,7 @@ public class AccountCloneHelper
                 var result = await dest.Task.AddParentTask(destChildTaskId, destParentTaskId);
                 if (!result.Success)
                 {
+                    Console.WriteLine($"Unable to create task {srcChildTask.Name} in project {srcChildTask.Project.Name}: {result.Error.Message}");
                     continue;
                 }
                 changeCount++;
@@ -843,11 +843,15 @@ public class AccountCloneHelper
     {
         // Task Field
         var srcTaskFields = await src.TaskField.QueryTaskFields().ThrowOnError("Fetching from source");
+        foreach (var item in srcTaskFields.Data)
+        {
+            item.Project.Id = map.MapKeyGuid("Project", item.Project.Id);
+        }
         var destTaskFields = await dest.TaskField.QueryTaskFields().ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcTaskFields.Data.Length} taskFields... ");
 
         var results = await SyncHelper.SyncData("TaskField", srcTaskFields.Data, destTaskFields.Data, map,
-            tf => tf.Name,
+            tf => $"{tf.Project.Id}-{tf.Name}",
             tf => tf.Id!.Value.ToString(),
             (tf1, tf2) => tf1.Name == tf2.Name
                           && Enumerable.SequenceEqual(tf1.Options, tf2.Options)
@@ -866,20 +870,14 @@ public class AccountCloneHelper
                 {
                     ntf.Type = "dropdown-single";
                 }
-                var destProjectId = map.MapKeyGuid("Project", tf.Project.Id) ?? Guid.Empty;
-                if (destProjectId != Guid.Empty)
+                var result = await dest.TaskField.CreateTaskField(tf.Project.Id ?? Guid.Empty, ntf);
+                if (result.Success)
                 {
-                    var result = await dest.TaskField.CreateTaskField(destProjectId, ntf);
-                    if (result.Success)
-                    {
-                        return result.Data.Id!.Value.ToString();
-                    }
-                    else
-                    {
-                        Console.WriteLine("Unable to create task field");
-                    }
+                    return result.Data.Id!.Value.ToString();
                 }
-
+                
+                // Failed to create a project field
+                Console.WriteLine($"Unable to create task field {tf.Name} in project {tf.Project.Name}: {result.Error.Message}");
                 return Guid.Empty.ToString();
             },
             (f1, f2) => Task.CompletedTask, // no updates available for project fields - ignore them 
@@ -893,13 +891,16 @@ public class AccountCloneHelper
     private static async Task CloneTaskFieldValues(ProjectManagerClient src, ProjectManagerClient dest, AccountMap map)
     {
         // Task Field Values
-        var srcTaskFieldValues = await src.TaskField.QueryTaskFieldValues(null, null, "value ne '' and value ne null")
+        var srcTaskFieldValues = await src.TaskField
+            .QueryTaskFieldValues(null, null, $"value ne '' and value ne null")
             .ThrowOnError("Fetching from source");
-        var destTaskFieldValues = await dest.TaskField.QueryTaskFieldValues(null, null, "value ne '' and value ne null")
+        var destTaskFieldValues = await dest.TaskField
+            .QueryTaskFieldValues(null, null, $"value ne '' and value ne null")
             .ThrowOnError("Fetching from destination");
         Console.Write($"Cloning {srcTaskFieldValues.Data.Length} task field values... ");
 
-        var results = await SyncHelper.SyncData("TaskFieldValue", srcTaskFieldValues.Data, destTaskFieldValues.Data, map,
+        var results = await SyncHelper.SyncData("TaskFieldValue", srcTaskFieldValues.Data, destTaskFieldValues.Data,
+            map,
             v => $"{v.Task.Name} - {v.Name}",
             v => v.Id!.Value.ToString(),
             (v1, v2) => v1.ShortId == v2.ShortId
@@ -925,11 +926,15 @@ public class AccountCloneHelper
                 }
 
                 var result = await dest.TaskField.UpdateTaskFieldValue(destTaskId, destFieldId, nv);
-                if (!result.Success)
+                if (result.Success)
                 {
-                    // No specific action to take
+                    return destFieldId.ToString();
                 }
-                return destFieldId.ToString();
+
+                // Unable to create this task field
+                Console.WriteLine(
+                    $"Unable to create task field value for task {v.Task.Name} - {v.Name}: {result.Error.Message}");
+                return Guid.Empty.ToString();
             },
             async (sv, dv) =>
             {
