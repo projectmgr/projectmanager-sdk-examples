@@ -603,7 +603,7 @@ public static class Program
                 {
                     Text = options.Message,
                 };
-                var result = await client.Discussion.CreateTaskComments(item.Id!.Value, comment);
+                var result = await client.Discussion.CreateTaskComment(item.Id!.Value, comment);
                 if (result == null || !result.Success)
                 {
                     Console.WriteLine($"Task comment failed: {result?.Error.Message}");

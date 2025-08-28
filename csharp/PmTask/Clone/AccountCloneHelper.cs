@@ -71,6 +71,12 @@ public class AccountCloneHelper
                 {
                     return Guid.Empty.ToString();
                 }
+
+                if (request.ResourceId == null)
+                {
+                    return Guid.Empty.ToString();
+                }
+                
                 var result = await dest.Timesheet.CreateTimeEntry(request);
                 if (result.Success)
                 {
