@@ -601,6 +601,11 @@ public class AccountCloneHelper
                 {
                     throw new Exception($"No destination project found for {t.Name}");
                 }
+
+                if (nt.PlannedDuration < 0)
+                {
+                    nt.PlannedDuration = Math.Abs(nt.PlannedDuration.Value);
+                }
                 var result = await dest.Task.CreateTask(destProjectId, nt).ThrowOnError("Creating");
                 return result.Data.Id!.Value.ToString();
             },
