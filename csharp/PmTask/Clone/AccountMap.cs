@@ -4,10 +4,10 @@ public class AccountMap
 {
     public class AccountMapItem()
     {
-        public string Category { get; set; }
-        public string Identity { get; set; }
-        public string OriginalPrimaryKey { get; set; }
-        public string NewPrimaryKey { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Identity { get; set; } = string.Empty;
+        public string OriginalPrimaryKey { get; set; } = string.Empty;
+        public string NewPrimaryKey { get; set; } = string.Empty;
 
         public string GetKey()
         {
