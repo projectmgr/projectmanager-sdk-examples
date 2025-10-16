@@ -18,6 +18,13 @@ public class RemoteTaskSync
             Console.WriteLine($"No projects found matching the name '{projectId}' within this account.");
             return null;
         }
+        
+        // If there's an exact match, use that
+        var exactMatch = projects.Data.Where(p => p.ShortId == projectId).ToList(); 
+        if (exactMatch.Count == 1)
+        {
+            return exactMatch[0];
+        }
 
         if (projects.Data.Length > 1)
         {
