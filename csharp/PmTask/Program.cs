@@ -380,12 +380,12 @@ public static class Program
                     $"- **Source**: {item.component.Replace(item.project + ":", "")} Line {item.line}\n" +
                     $"- **Detected**: {item.creationDate}\n" +
                     $"- **Blame**: {item.author}\n" +
-                    $"- **Link**: [https://sonarcloud.io/project/security_hotspots?id={item.project}&hotspots={item.key}]\n" +
                     $"- **SonarCloud ID**: {item.key}",
                 PriorityId = GetPriorityId(item.vulnerabilityProbability, priorities),
                 Assignees = FindAssigneeByEmail(item.author, null, resources),
                 Theme = GetThemeFromSeverity(item.vulnerabilityProbability),
             };
+            taskCreate.Description = taskCreate.Description.Replace("_", "\\_");
             list.Add(new RemoteSystemTaskModel() { UniqueId = item.key, TaskCreate = taskCreate });
         }
 
@@ -460,6 +460,8 @@ public static class Program
                 return "Orange";
             case "MEDIUM":
                 return "Yellow";
+            case "LOW":
+                return "Green";
             default:
                 return null;
         }
