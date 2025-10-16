@@ -385,7 +385,6 @@ public static class Program
                 Assignees = FindAssigneeByEmail(item.author, null, resources),
                 Theme = GetThemeFromSeverity(item.vulnerabilityProbability),
             };
-            taskCreate.Description = taskCreate.Description.Replace("_", "\\_");
             list.Add(new RemoteSystemTaskModel() { UniqueId = item.key, TaskCreate = taskCreate });
         }
 
