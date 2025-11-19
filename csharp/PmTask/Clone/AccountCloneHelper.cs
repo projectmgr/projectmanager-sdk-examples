@@ -164,7 +164,7 @@ public class AccountCloneHelper
                 {
                     var membershipResult = await dest.ProjectMembers.CreateUserProjectMembership(result.Data.Id!.Value, resource.Id!.Value,
                             new ProjectMemberRoleDto() { Role = "Manager" });
-                    if (!membershipResult.Success && !membershipResult.Error.Message.Contains("user has access to project"))
+                    if (!membershipResult.Success && !membershipResult.Error.Message.Contains("User already has access to project"))
                     {
                         Console.WriteLine($"Unable to create membership for {resource.FirstName} {resource.LastName} in project {np.Name}: {membershipResult.Error.Message}");
                     }
